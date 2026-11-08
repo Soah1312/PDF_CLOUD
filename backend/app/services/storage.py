@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Union, Dict, Any
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from fastapi import HTTPException, status
 
@@ -47,12 +48,17 @@ class StorageService:
 
     def _init_s3(self):
         """
-        Initializes boto3 S3 client using the standard AWS SDK credential provider chain.
+        Initializes boto3 S3 client using the standard AWS SDK credential provider chain
+        configured with SigV4 and virtual-hosted addressing style.
         In AWS environments (EC2), automatically adopts IAM instance role credentials.
         In local dev without credentials, gracefully activates local fallback.
         """
         try:
-            client = boto3.client("s3", region_name=self.region)
+            s3_config = Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "virtual"}
+            )
+            client = boto3.client("s3", region_name=self.region, config=s3_config)
             # Lightweight credentials validation test
             try:
                 client.head_bucket(Bucket=self.bucket_name)

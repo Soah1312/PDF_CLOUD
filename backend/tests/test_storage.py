@@ -77,3 +77,77 @@ def test_storage_path_traversal_rejection():
     with pytest.raises(HTTPException) as exc:
         StorageService.validate_storage_path("/absolute/path/file.pdf")
     assert exc.value.status_code == 400
+
+
+def test_storage_s3_client_uses_sigv4_and_virtual_addressing(monkeypatch):
+    """
+    Verifies that StorageService initializes the S3 client with:
+    - SigV4 signature version ('s3v4')
+    - Virtual-hosted addressing style ('virtual')
+    """
+    import boto3
+    from unittest.mock import MagicMock
+
+    captured_kwargs = {}
+    original_client = boto3.client
+
+    def mock_boto3_client(service_name, **kwargs):
+        captured_kwargs.update(kwargs)
+        mock_cli = MagicMock()
+        mock_cli.head_bucket.return_value = {}
+        return mock_cli
+
+    monkeypatch.setattr(boto3, "client", mock_boto3_client)
+    service = StorageService(bucket_name="cloudpdf-studio-storage-2026", region="ap-south-1")
+
+    assert captured_kwargs.get("region_name") == "ap-south-1"
+    config_obj = captured_kwargs.get("config")
+    assert config_obj is not None
+    assert config_obj.signature_version == "s3v4"
+    assert config_obj.s3 == {"addressing_style": "virtual"}
+    assert service.is_s3_active() is True
+
+
+def test_storage_generate_presigned_url_uses_get_object_and_preserves_filename(monkeypatch):
+    """
+    Verifies that generate_presigned_url():
+    - Generates presigned URLs for 'get_object'
+    - Preserves download filename in ResponseContentDisposition
+    - Incorporates virtual-hosted addressing and SigV4 query parameters
+    """
+    import boto3
+    from botocore.config import Config
+
+    # Create real Boto3 client with the configured SigV4 and virtual addressing
+    s3_cfg = Config(signature_version="s3v4", s3={"addressing_style": "virtual"})
+    test_client = boto3.client(
+        "s3",
+        region_name="ap-south-1",
+        config=s3_cfg,
+        aws_access_key_id="test-key",
+        aws_secret_access_key="test-secret"
+    )
+
+    service = StorageService(bucket_name="cloudpdf-studio-storage-2026", region="ap-south-1")
+    monkeypatch.setattr(service, "_s3_client", test_client)
+    monkeypatch.setattr(service, "_s3_available", True)
+
+    key = "users/123/processed/audit_output.pdf"
+    download_filename = "Invoice_2026.pdf"
+
+    url = service.generate_presigned_url(
+        key=key,
+        expiration=1800,
+        download_filename=download_filename
+    )
+
+    assert url is not None
+    # 1. Virtual-hosted addressing domain
+    assert "cloudpdf-studio-storage-2026.s3.ap-south-1.amazonaws.com" in url
+    # 2. SigV4 parameters
+    assert "X-Amz-Algorithm=AWS4-HMAC-SHA256" in url
+    assert "X-Amz-Signature=" in url
+    # 3. Preserved download filename
+    assert "response-content-disposition=" in url
+    assert "Invoice_2026.pdf" in url
+
