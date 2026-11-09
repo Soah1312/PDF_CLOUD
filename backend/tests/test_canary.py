@@ -81,8 +81,9 @@ def test_canary_token_tampering_detection():
     tampered_chk = valid_token[:-1] + ("0" if valid_token[-1] != "0" else "1")
     assert CanaryService.validate_token_format(tampered_chk) is False
 
-    # Corrupt body
-    tampered_body = valid_token[:15] + "A" + valid_token[16:]
+    # Corrupt body (ensure character actually changes)
+    corrupt_char = "0" if valid_token[15] != "0" else "1"
+    tampered_body = valid_token[:15] + corrupt_char + valid_token[16:]
     assert CanaryService.validate_token_format(tampered_body) is False
 
 
