@@ -8,20 +8,19 @@ import {
   LogOut,
   LogIn,
   ShieldCheck,
-  Menu,
   X,
   ArrowRight,
   Info,
+  User,
 } from 'lucide-react';
 import { BINDERY_TOOLS } from '../../config/tools';
 
-export default function Navbar({ onOpenCommandPalette }) {
+export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
 
   const [toolsOpen, setToolsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const toolsDropdownRef = useRef(null);
   const privacyRef = useRef(null);
@@ -40,7 +39,6 @@ export default function Navbar({ onOpenCommandPalette }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Group tools for the menu
   const toolGroups = [
     {
       name: 'Merge & Split',
@@ -66,18 +64,17 @@ export default function Navbar({ onOpenCommandPalette }) {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-vellum/95 backdrop-blur-md border-b border-rule">
+    <header className="sticky top-0 z-40 w-full bg-vellum/95 backdrop-blur-md border-b border-rule pt-safe">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-        {/* Left: Brand + Tools Menu + Privacy Badge */}
-        <div className="flex items-center gap-6">
+        {/* Left: Brand + Tools Dropdown + Privacy Popover */}
+        <div className="flex items-center gap-4 sm:gap-6">
           {/* Brand Mark */}
           <Link
             to="/"
-            className="flex items-center gap-2.5 group focus:outline-none"
+            className="flex items-center gap-2.5 group focus:outline-none touch-target"
             aria-label="CloudPDF Studio Home"
           >
-            <div className="w-7 h-7 rounded border border-ink bg-paper flex items-center justify-center transition-transform duration-120 group-hover:-translate-y-0.5 shadow-sm">
-              {/* Bench booklet glyph */}
+            <div className="w-8 h-8 rounded border border-ink bg-paper flex items-center justify-center transition-transform duration-120 group-hover:-translate-y-0.5 shadow-sm">
               <svg
                 viewBox="0 0 24 24"
                 className="w-4 h-4 text-ink"
@@ -103,7 +100,7 @@ export default function Navbar({ onOpenCommandPalette }) {
             </div>
           </Link>
 
-          {/* Tools Dropdown Trigger */}
+          {/* Desktop Tools Dropdown */}
           <div className="relative hidden md:block" ref={toolsDropdownRef}>
             <button
               onClick={() => setToolsOpen(!toolsOpen)}
@@ -184,50 +181,58 @@ export default function Navbar({ onOpenCommandPalette }) {
             )}
           </div>
 
-          {/* Privacy Popover ("Stateless & In-Memory") */}
-          <div className="relative hidden lg:block" ref={privacyRef}>
+          {/* Privacy Popover / Sheet Trigger */}
+          <div className="relative" ref={privacyRef}>
             <button
               onClick={() => setPrivacyOpen(!privacyOpen)}
-              className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-mono text-ink-soft bg-paper/60 border border-rule/80 rounded hover:bg-kraft/40 hover:text-ink transition-colors"
+              className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-mono text-ink-soft bg-paper/60 border border-rule/80 rounded hover:bg-kraft/40 hover:text-ink transition-colors touch-target"
               title="Inspect zero-retention architecture"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-moss"></span>
-              <span>Stateless & In-Memory</span>
-              <Info className="w-3 h-3 text-ink-faint" strokeWidth={1.5} />
+              <span className="w-1.5 h-1.5 rounded-full bg-moss shrink-0"></span>
+              <span className="hidden sm:inline">Stateless & In-Memory</span>
+              <span className="sm:hidden">Private</span>
+              <Info className="w-3 h-3 text-ink-faint shrink-0" strokeWidth={1.5} />
             </button>
 
+            {/* Privacy Sheet on Mobile / Popover on Desktop */}
             {privacyOpen && (
-              <div className="absolute left-0 mt-1.5 w-72 bg-vellum border border-rule rounded-md shadow-ink-lift p-3.5 z-50 text-xs space-y-2">
-                <div className="flex items-center justify-between border-b border-rule pb-2">
-                  <div className="flex items-center gap-1.5 font-medium text-ink">
-                    <ShieldCheck className="w-4 h-4 text-moss" strokeWidth={1.5} />
-                    <span>Print-Shop Privacy Guarantee</span>
+              <>
+                <div
+                  className="fixed sm:hidden inset-0 bg-ink/40 z-40"
+                  onClick={() => setPrivacyOpen(false)}
+                />
+                <div className="fixed sm:absolute bottom-0 sm:bottom-auto left-0 sm:left-0 sm:mt-1.5 w-full sm:w-80 bg-vellum border-t sm:border border-rule sm:rounded-md shadow-ink-drag sm:shadow-ink-lift p-4 z-50 text-xs space-y-2.5 pb-safe animate-sheet-up sm:animate-none">
+                  <div className="flex items-center justify-between border-b border-rule pb-2">
+                    <div className="flex items-center gap-1.5 font-medium text-ink">
+                      <ShieldCheck className="w-4 h-4 text-moss" strokeWidth={1.5} />
+                      <span>Print-Shop Privacy Guarantee</span>
+                    </div>
+                    <button
+                      onClick={() => setPrivacyOpen(false)}
+                      className="p-1 text-ink-faint hover:text-ink"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setPrivacyOpen(false)}
-                    className="text-ink-faint hover:text-ink"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  <p className="text-ink-soft leading-relaxed text-[11px]">
+                    Files uploaded to guest bench tools are strictly processed in volatile server RAM. They are{' '}
+                    <strong className="text-ink font-semibold">discarded immediately</strong> upon download or timeout.
+                  </p>
+                  <p className="text-ink-soft leading-relaxed text-[11px]">
+                    Documents are only stored persistently when an authenticated user explicitly clicks{' '}
+                    <span className="font-mono text-ink bg-kraft px-1 py-0.5 rounded text-[10px]">
+                      Save to Vault
+                    </span>
+                    , where they receive client-isolated AES-256 encryption.
+                  </p>
                 </div>
-                <p className="text-ink-soft leading-relaxed text-[11px]">
-                  Files uploaded to guest bench tools are strictly processed in volatile server RAM. They are{' '}
-                  <strong className="text-ink font-semibold">discarded immediately</strong> upon download or timeout.
-                </p>
-                <p className="text-ink-soft leading-relaxed text-[11px]">
-                  Documents are only stored persistently when an authenticated user explicitly clicks{' '}
-                  <span className="font-mono text-ink bg-kraft px-1 py-0.5 rounded text-[10px]">
-                    Save to Vault
-                  </span>
-                  , where they receive client-isolated AES-256 encryption.
-                </p>
-              </div>
+              </>
             )}
           </div>
         </div>
 
-        {/* Center: Command Palette Trigger */}
-        <div className="hidden sm:flex items-center flex-1 max-w-xs mx-4">
+        {/* Center: Command Palette Trigger on Desktop */}
+        <div className="hidden md:flex items-center flex-1 max-w-xs mx-4">
           <button
             onClick={onOpenCommandPalette}
             className="w-full flex items-center justify-between px-3 py-1.5 rounded border border-rule bg-paper hover:bg-kraft/50 text-ink-soft hover:text-ink text-xs transition-colors"
@@ -242,13 +247,22 @@ export default function Navbar({ onOpenCommandPalette }) {
           </button>
         </div>
 
-        {/* Right: Vault & Account */}
-        <div className="hidden md:flex items-center gap-3">
-          {/* Cloud Vault Direct Link */}
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2">
+          {/* Mobile Search Button */}
+          <button
+            onClick={onOpenCommandPalette}
+            className="md:hidden p-2 rounded border border-rule bg-paper text-ink-soft hover:text-ink touch-target flex items-center justify-center"
+            aria-label="Open search palette"
+          >
+            <Search className="w-4 h-4" strokeWidth={1.5} />
+          </button>
+
+          {/* Desktop Cloud Vault Direct Link */}
           <NavLink
             to="/workspace"
             className={({ isActive }) =>
-              `flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
+              `hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
                 isActive
                   ? 'bg-kraft border-rule-strong text-ink'
                   : 'bg-paper/70 border-rule hover:bg-kraft/40 text-ink-soft hover:text-ink'
@@ -259,16 +273,20 @@ export default function Navbar({ onOpenCommandPalette }) {
             <span>Cloud Vault</span>
           </NavLink>
 
-          {/* Account state */}
+          {/* Account Controls */}
           {isAuthenticated ? (
-            <div className="flex items-center gap-2 pl-2 border-l border-rule">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-kraft/40 border border-rule text-xs text-ink max-w-[150px]">
+            <div className="flex items-center gap-2 pl-1 sm:pl-2 sm:border-l border-rule">
+              <Link
+                to="/workspace"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-kraft/40 border border-rule text-xs text-ink max-w-[140px] touch-target"
+                title={user?.email}
+              >
                 <span className="w-1.5 h-1.5 rounded-full bg-moss shrink-0"></span>
                 <span className="truncate text-[11px] font-mono">{user?.email}</span>
-              </div>
+              </Link>
               <button
                 onClick={handleLogout}
-                className="p-1.5 rounded border border-rule hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
+                className="hidden sm:flex p-1.5 rounded border border-rule hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
                 title="Sign out of bench"
               >
                 <LogOut className="w-3.5 h-3.5" strokeWidth={1.5} />
@@ -278,105 +296,21 @@ export default function Navbar({ onOpenCommandPalette }) {
             <div className="flex items-center gap-2">
               <Link
                 to="/login"
-                className="px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:text-ink transition-colors"
+                className="hidden sm:inline-block px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:text-ink transition-colors"
               >
                 Sign in
               </Link>
               <Link
                 to="/register"
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-red text-vellum font-medium text-xs hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-red text-vellum font-medium text-xs hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px touch-target"
               >
                 <span>Open Vault</span>
-                <ArrowRight className="w-3 h-3" strokeWidth={2} />
+                <ArrowRight className="w-3 h-3 hidden sm:inline-block" strokeWidth={2} />
               </Link>
             </div>
           )}
         </div>
-
-        {/* Mobile Hamburger Button */}
-        <div className="flex md:hidden items-center gap-2">
-          <button
-            onClick={onOpenCommandPalette}
-            className="p-2 rounded border border-rule bg-paper text-ink-soft hover:text-ink"
-            aria-label="Search"
-          >
-            <Search className="w-4 h-4" strokeWidth={1.5} />
-          </button>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded border border-rule bg-paper text-ink"
-            aria-label="Toggle navigation menu"
-          >
-            {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          </button>
-        </div>
       </div>
-
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t border-rule bg-vellum px-4 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            {BINDERY_TOOLS.slice(0, 8).map((tool) => {
-              const Icon = tool.icon;
-              return (
-                <Link
-                  key={tool.id}
-                  to={tool.to}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-2 p-2 rounded border border-rule bg-paper text-xs text-ink"
-                >
-                  <Icon className="w-3.5 h-3.5 text-ink-soft shrink-0" strokeWidth={1.5} />
-                  <span className="truncate">{tool.title}</span>
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="pt-3 border-t border-rule space-y-2">
-            <Link
-              to="/workspace"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center justify-between p-2.5 rounded border border-rule bg-kraft/40 text-xs font-medium text-ink"
-            >
-              <div className="flex items-center gap-2">
-                <Archive className="w-4 h-4 text-ink" strokeWidth={1.5} />
-                <span>Cloud Vault & Canary Ledger</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-ink-soft" />
-            </Link>
-
-            {isAuthenticated ? (
-              <button
-                onClick={() => {
-                  handleLogout();
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full flex items-center justify-between p-2.5 rounded border border-red/40 bg-red/10 text-xs text-red font-medium"
-              >
-                <span>Sign Out ({user?.email})</span>
-                <LogOut className="w-4 h-4" />
-              </button>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <Link
-                  to="/login"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center py-2 rounded border border-rule bg-paper text-xs font-medium text-ink"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  to="/register"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center py-2 rounded bg-red text-vellum text-xs font-medium shadow-ink-button"
-                >
-                  Open Vault
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </header>
   );
 }

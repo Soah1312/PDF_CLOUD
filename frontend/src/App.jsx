@@ -5,6 +5,8 @@ import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import CommandPalette from './components/common/CommandPalette';
+import MobileBottomNav from './components/layout/MobileBottomNav';
+import ToolsBottomSheet from './components/common/ToolsBottomSheet';
 
 // Pages
 import Home from './pages/Home';
@@ -17,6 +19,7 @@ import ToolRunner from './pages/ToolRunner';
 
 function AppContent() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [toolsSheetOpen, setToolsSheetOpen] = useState(false);
 
   // Global Ctrl+K / Cmd+K handler
   useEffect(() => {
@@ -31,18 +34,29 @@ function AppContent() {
   }, []);
 
   return (
-    <div className="flex flex-col min-h-screen bg-paper text-ink font-sans selection:bg-marigold selection:text-ink relative">
-      {/* Subtle paper-grain texture overlay */}
+    <div className="flex flex-col min-h-screen bg-paper text-ink font-sans selection:bg-marigold selection:text-ink relative pb-16 md:pb-0">
+      {/* Subtle paper-grain texture overlay (auto-hidden on low-end/mobile) */}
       <div className="paper-grain-overlay" aria-hidden="true" />
 
-      {/* Global Command Palette */}
+      {/* Global Command Palette (Full-screen search sheet on mobile) */}
       <CommandPalette
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
       />
 
-      <Navbar onOpenCommandPalette={() => setCommandPaletteOpen(true)} />
+      {/* Mobile Tools Bottom Sheet */}
+      <ToolsBottomSheet
+        isOpen={toolsSheetOpen}
+        onClose={() => setToolsSheetOpen(false)}
+      />
 
+      {/* Top Bar */}
+      <Navbar
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        onOpenToolsSheet={() => setToolsSheetOpen(true)}
+      />
+
+      {/* Main Content Area */}
       <main className="flex-1">
         <Routes>
           {/* Public & Guest Accessible Routes */}
@@ -69,7 +83,14 @@ function AppContent() {
         </Routes>
       </main>
 
+      {/* Desktop Footer */}
       <Footer />
+
+      {/* Fixed Mobile Bottom Tab Bar (Home, Tools, Search, Vault, Account) */}
+      <MobileBottomNav
+        onOpenToolsSheet={() => setToolsSheetOpen(true)}
+        onOpenSearchSheet={() => setCommandPaletteOpen(true)}
+      />
     </div>
   );
 }

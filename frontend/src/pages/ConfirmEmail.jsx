@@ -117,7 +117,7 @@ export default function ConfirmEmail() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@example.com"
-              className="w-full px-3 py-2 rounded border border-rule bg-paper text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan"
+              className="w-full px-3 py-2 rounded border border-rule bg-paper text-base sm:text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan min-h-[44px]"
             />
           </div>
 
@@ -132,14 +132,14 @@ export default function ConfirmEmail() {
               value={code}
               onChange={(e) => setCode(e.target.value.trim())}
               placeholder="123456"
-              className="w-full px-3 py-2.5 rounded border border-rule bg-paper text-center text-lg font-mono font-bold tracking-widest text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan"
+              className="w-full px-3 py-2.5 rounded border border-rule bg-paper text-center text-lg font-mono font-bold tracking-widest text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan min-h-[44px]"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className="w-full py-2.5 px-4 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px flex items-center justify-center gap-1.5 disabled:opacity-50 min-h-[44px]"
           >
             {loading ? (
               <>

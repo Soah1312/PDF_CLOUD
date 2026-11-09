@@ -16,6 +16,7 @@ import {
   AlertCircle,
   X,
   FileCode,
+  Camera,
 } from 'lucide-react';
 import { BINDERY_TOOLS, TOOL_CATEGORIES } from '../config/tools';
 import ToolCard from '../components/common/ToolCard';
@@ -41,6 +42,7 @@ export default function Home() {
   const [droppedFiles, setDroppedFiles] = useState([]);
   const [fileAnalysis, setFileAnalysis] = useState(null);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   // Four featured bench tools
   const featuredToolIds = ['merge', 'split', 'compress', 'protect'];
@@ -195,6 +197,15 @@ export default function Home() {
             className="hidden"
             onChange={(e) => handleFilesChosen(e.target.files)}
           />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            className="hidden"
+            onChange={(e) => handleFilesChosen(e.target.files)}
+          />
 
           {!fileAnalysis ? (
             /* Empty Rest / Drag-Over State */
@@ -205,10 +216,10 @@ export default function Home() {
                 setIsDragging(true);
               }}
               onDragLeave={() => setIsDragging(false)}
-              className={`relative cursor-pointer p-8 sm:p-12 rounded-md border-2 border-dashed transition-all duration-150 text-center select-none ${
+              className={`relative cursor-pointer p-6 sm:p-12 rounded-md border-2 border-dashed transition-all duration-150 text-center select-none ${
                 isDragging
                   ? 'border-red bg-kraft/70 -translate-y-0.5 shadow-ink-lift'
-                  : 'border-rule hover:border-rule-strong bg-vellum hover:bg-kraft/30 shadow-subtle'
+                  : 'border-rule hover:border-rule-strong bg-vellum hover:bg-kraft/30 active:bg-kraft/50 shadow-subtle'
               }`}
             >
               {/* Corner Registration Marks (+) */}
@@ -251,17 +262,44 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <p className="font-display text-lg text-ink">
+                  <p className="font-display text-base sm:text-lg text-ink font-semibold">
                     {isDragging
                       ? 'Release to add to workbench'
                       : 'Place documents on the workbench'}
                   </p>
                   <p className="text-xs text-ink-soft mt-1">
-                    Drag and drop PDFs or images anywhere, or click to browse local files.
+                    Drag and drop PDFs or images anywhere, or tap below to choose folios.
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-[11px] font-mono text-ink-faint">
+                {/* Mobile Touch Action Buttons (>= 44px hit targets) */}
+                <div className="flex sm:hidden flex-col gap-2 pt-2 w-full max-w-xs mx-auto">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fileInputRef.current?.click();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded bg-red text-vellum font-semibold text-xs transition-colors shadow-ink-button min-h-[44px] active:scale-[0.98]"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    <span>Choose PDF / Files</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      cameraInputRef.current?.click();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded border border-rule bg-paper hover:bg-kraft active:bg-kraft/70 text-ink font-semibold text-xs transition-colors min-h-[44px] active:scale-[0.98]"
+                  >
+                    <Camera className="w-4 h-4 text-ink-soft" />
+                    <span>Scan / Take Photo</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 pt-2 text-[10px] sm:text-[11px] font-mono text-ink-faint">
                   <span className="px-2 py-0.5 rounded bg-kraft/60 border border-rule">
                     PDF up to 100 MB
                   </span>
@@ -472,7 +510,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {featuredTools.map((tool) => (
               <ToolCard
                 key={tool.id}
@@ -514,7 +552,7 @@ export default function Home() {
           </div>
 
           {/* Category Filter Chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar scroll-smooth">
             {TOOL_CATEGORIES.map((cat) => (
               <button
                 key={cat.id}

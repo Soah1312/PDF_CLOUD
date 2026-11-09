@@ -17,8 +17,14 @@ export default function CommandPalette({ isOpen, onClose }) {
     if (isOpen) {
       setQuery('');
       setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => inputRef.current?.focus(), 80);
+    } else {
+      document.body.style.overflow = '';
     }
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen]);
 
   // Build searchable items
@@ -134,45 +140,50 @@ export default function CommandPalette({ isOpen, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-ink/40 backdrop-blur-sm transition-opacity duration-200"
+      className="fixed inset-0 z-50 flex items-end sm:items-start justify-center sm:pt-20 px-0 sm:px-4 bg-ink/50 backdrop-blur-sm transition-opacity duration-200"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"
     >
       <div
-        className="w-full max-w-2xl bg-vellum border border-rule rounded-md shadow-ink-drag overflow-hidden transform transition-all duration-200 ease-out"
-        style={{ animation: 'scaleIn 160ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards' }}
+        className="w-full sm:max-w-2xl h-[100dvh] sm:h-auto sm:max-h-[85vh] bg-vellum sm:border border-rule sm:rounded-md shadow-ink-drag flex flex-col overflow-hidden pt-safe pb-safe"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
-        {/* Search Input Bar */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-rule bg-paper/60">
-          <Search className="w-4 h-4 text-ink-soft shrink-0" strokeWidth={1.5} />
+        {/* Search Input Bar (Touch friendly min 44px) */}
+        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-rule bg-paper/80 shrink-0">
+          <Search className="w-5 h-5 text-ink-soft shrink-0" strokeWidth={1.5} />
           <input
             ref={inputRef}
             type="text"
-            className="flex-1 bg-transparent text-sm text-ink placeholder:text-ink-faint focus:outline-none"
-            placeholder="Search bench tools, actions, or jump to vault... (Esc to close)"
+            className="flex-1 bg-transparent text-base sm:text-sm text-ink placeholder:text-ink-faint focus:outline-none"
+            placeholder="Search bench tools or actions..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono tracking-mono text-ink-soft bg-kraft/70 border border-rule rounded">
-            ESC
-          </kbd>
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              className="p-1.5 text-ink-faint hover:text-ink rounded touch-target flex items-center justify-center"
+              aria-label="Clear query"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={onClose}
-            className="sm:hidden p-1 text-ink-soft hover:text-ink rounded"
-            aria-label="Close"
+            className="p-2 -mr-1 text-ink-soft hover:text-ink font-mono text-xs touch-target flex items-center justify-center rounded"
+            aria-label="Cancel and close"
           >
-            <X className="w-4 h-4" />
+            Cancel
           </button>
         </div>
 
         {/* Results List */}
-        <div ref={listRef} className="max-h-96 overflow-y-auto p-2 divide-y divide-rule/40">
+        <div ref={listRef} className="flex-1 overflow-y-auto p-2 divide-y divide-rule/40 overscroll-contain">
           {items.length === 0 ? (
-            <div className="py-12 text-center">
+            <div className="py-16 text-center">
               <p className="text-sm text-ink-soft font-sans">No matching bench tools found</p>
               <p className="text-xs text-ink-faint mt-1 font-mono">
                 Try searching "merge", "cut", "seal", or "press"
@@ -188,14 +199,14 @@ export default function CommandPalette({ isOpen, onClose }) {
                   data-active={isSelected ? 'true' : 'false'}
                   onClick={() => handleSelect(item)}
                   onMouseEnter={() => setSelectedIndex(index)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded cursor-pointer transition-colors duration-100 ${
+                  className={`flex items-center gap-3 px-3 py-3 rounded cursor-pointer transition-colors duration-100 touch-target touch-press ${
                     isSelected
                       ? 'bg-marigold text-ink font-medium shadow-sm'
                       : 'hover:bg-kraft/50 text-ink'
                   }`}
                 >
                   <div
-                    className={`p-1.5 rounded border border-rule shrink-0 ${
+                    className={`p-2 rounded border border-rule shrink-0 ${
                       isSelected ? 'bg-vellum text-ink' : 'bg-paper text-ink-soft'
                     }`}
                   >
@@ -204,19 +215,19 @@ export default function CommandPalette({ isOpen, onClose }) {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium truncate">{item.title}</span>
+                      <span className="text-sm font-semibold truncate">{item.title}</span>
                       <span
-                        className={`text-[10px] font-mono px-1.5 py-0.2 rounded uppercase tracking-mono ${
+                        className={`text-[9px] font-mono px-1 py-0.2 rounded uppercase tracking-mono ${
                           isSelected
                             ? 'bg-ink text-vellum'
-                            : 'bg-kraft/60 text-ink-soft border border-rule/60'
+                            : 'bg-kraft/80 text-ink-soft border border-rule/60'
                         }`}
                       >
                         {item.verb}
                       </span>
                     </div>
                     <p
-                      className={`text-xs truncate ${
+                      className={`text-xs truncate mt-0.5 ${
                         isSelected ? 'text-ink/80' : 'text-ink-soft'
                       }`}
                     >
@@ -225,15 +236,8 @@ export default function CommandPalette({ isOpen, onClose }) {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className={`text-[10px] font-mono tracking-mono hidden sm:inline-block ${
-                        isSelected ? 'text-ink/70' : 'text-ink-faint'
-                      }`}
-                    >
-                      {item.category}
-                    </span>
                     <ArrowRight
-                      className={`w-3.5 h-3.5 transition-transform duration-120 ${
+                      className={`w-4 h-4 transition-transform duration-120 ${
                         isSelected ? 'translate-x-0.5 text-ink' : 'text-ink-faint'
                       }`}
                       strokeWidth={1.5}
@@ -245,8 +249,8 @@ export default function CommandPalette({ isOpen, onClose }) {
           )}
         </div>
 
-        {/* Footer info bar */}
-        <div className="px-4 py-2 border-t border-rule bg-paper/80 flex items-center justify-between text-[11px] font-mono text-ink-faint">
+        {/* Footer info bar on desktop */}
+        <div className="hidden sm:flex px-4 py-2 border-t border-rule bg-paper/80 items-center justify-between text-[11px] font-mono text-ink-faint shrink-0">
           <div className="flex items-center gap-3">
             <span>↑↓ Navigate</span>
             <span>↵ Select</span>
@@ -258,4 +262,3 @@ export default function CommandPalette({ isOpen, onClose }) {
     </div>
   );
 }
-

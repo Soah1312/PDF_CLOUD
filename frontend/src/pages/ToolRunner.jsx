@@ -35,6 +35,10 @@ import {
   WifiOff,
   CornerDownRight,
   Sparkles,
+  Share2,
+  Check,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -87,6 +91,8 @@ export default function ToolRunner() {
   const [splitMode, setSplitMode] = useState('ranges'); // 'ranges', 'every_n', 'selected'
   const [everyNPages, setEveryNPages] = useState(1);
   const [splitRange, setSplitRange] = useState('');
+  const [splitInteraction, setSplitInteraction] = useState('cut'); // 'cut' | 'select'
+  const [selectedPages, setSelectedPages] = useState(new Set());
 
   // Tool specific options
   const [rotateAngle, setRotateAngle] = useState(90);
@@ -253,6 +259,9 @@ export default function ToolRunner() {
   };
 
   const moveFile = (index, direction) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
     setSelectedFiles((prev) => {
       const updated = [...prev];
       const targetIndex = index + direction;
@@ -262,6 +271,78 @@ export default function ToolRunner() {
       updated[targetIndex] = temp;
       return updated;
     });
+  };
+
+  const moveFileToEdge = (index, toTop = false) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+    setSelectedFiles((prev) => {
+      const updated = [...prev];
+      const [item] = updated.splice(index, 1);
+      if (toTop) {
+        updated.unshift(item);
+      } else {
+        updated.push(item);
+      }
+      return updated;
+    });
+  };
+
+  // Convert Set of page numbers into comma-separated ranges e.g. "1, 3, 5-8"
+  const formatRangesFromSet = (setOfNumbers) => {
+    const sorted = Array.from(setOfNumbers).sort((a, b) => a - b);
+    if (!sorted.length) return '';
+    const ranges = [];
+    let start = sorted[0];
+    let end = sorted[0];
+
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === end + 1) {
+        end = sorted[i];
+      } else {
+        ranges.push(start === end ? `${start}` : `${start}-${end}`);
+        start = sorted[i];
+        end = sorted[i];
+      }
+    }
+    ranges.push(start === end ? `${start}` : `${start}-${end}`);
+    return ranges.join(', ');
+  };
+
+  const toggleSelectPage = (pageNum) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+    setSelectedPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageNum)) {
+        next.delete(pageNum);
+      } else {
+        next.add(pageNum);
+      }
+      setSplitRange(formatRangesFromSet(next));
+      return next;
+    });
+  };
+
+  const quickSelectPages = (mode) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+    const all = Array.from({ length: splitPageCount }, (_, i) => i + 1);
+    let chosen = new Set();
+    if (mode === 'all') {
+      chosen = new Set(all);
+    } else if (mode === 'none') {
+      chosen = new Set();
+    } else if (mode === 'odd') {
+      chosen = new Set(all.filter((p) => p % 2 !== 0));
+    } else if (mode === 'even') {
+      chosen = new Set(all.filter((p) => p % 2 === 0));
+    }
+    setSelectedPages(chosen);
+    setSplitRange(formatRangesFromSet(chosen));
   };
 
   // Bind API method by tool ID
@@ -327,6 +408,15 @@ export default function ToolRunner() {
     setResultData(null);
 
     abortControllerRef.current = new AbortController();
+
+    let wakeLock = null;
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+      } catch (e) {
+        // WakeLock request ignored or failed
+      }
+    }
 
     try {
       const formData = new FormData();
@@ -396,8 +486,54 @@ export default function ToolRunner() {
         setErrorMessage(detail);
       }
     } finally {
+      if (wakeLock) {
+        try {
+          await wakeLock.release();
+        } catch (e) {}
+      }
       setIsProcessing(false);
       setProcessingStage('');
+    }
+  };
+
+  const handleShareResult = async () => {
+    if (!resultData?.download_url) return;
+    const filename = resultData.output_filename || 'document.pdf';
+    const url = resultData.download_url;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: filename,
+          text: `Processed folio: ${filename}`,
+          url,
+        });
+      } catch (err) {}
+    } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(url);
+      alert('Download link copied to clipboard.');
+    }
+  };
+
+  const getOptionsSummary = () => {
+    switch (currentTool.id) {
+      case 'compress':
+        return `${compressLevel === 'low' ? 'Low' : compressLevel === 'high' ? 'High' : 'Balanced'} (~${compressLevel === 'low' ? '20%' : compressLevel === 'high' ? '75%' : '50%'})`;
+      case 'split':
+        return splitInteraction === 'cut'
+          ? `${cutPoints.size} cuts • ${splitPageCount} folios`
+          : `${selectedPages.size} folios selected`;
+      case 'rotate':
+        return `${rotateAngle}° clockwise`;
+      case 'protect':
+        return protectPassword ? 'Passphrase active' : 'Password required';
+      case 'watermark':
+        return `"${watermarkText}" • ${Math.round(watermarkOpacity * 100)}%`;
+      case 'to-images':
+        return `${imageFormat.toUpperCase()} • ${imageDpi} DPI`;
+      case 'canary':
+        return canaryRecipientName ? `${canaryRecipientName}` : 'Forensic SHA-256';
+      default:
+        return 'Standard configuration';
     }
   };
 
@@ -406,6 +542,7 @@ export default function ToolRunner() {
     setResultData(null);
     setErrorMessage('');
     setCutPoints(new Set());
+    setSelectedPages(new Set());
     setSplitRange('');
   };
 
@@ -426,6 +563,316 @@ export default function ToolRunner() {
       navigate(`/tools/${targetToolId}`);
     }
   };
+
+  const renderOptionsContent = () => (
+    <>
+      {/* 1. COMPRESS OPTIONS */}
+      {currentTool.id === 'compress' && (
+        <div className="space-y-3">
+          <label className="block text-xs font-semibold text-ink">
+            Compression Calibration
+          </label>
+          <div className="space-y-2">
+            {[
+              {
+                id: 'low',
+                label: 'Low Compression',
+                desc: 'Preserves 300 DPI vectors & image plates',
+                est: '~20% reduction',
+              },
+              {
+                id: 'medium',
+                label: 'Balanced (Standard)',
+                desc: 'Recommended for archiving & email delivery',
+                est: '~50% reduction',
+              },
+              {
+                id: 'high',
+                label: 'High Compression',
+                desc: 'Downsamples to 150 DPI for smallest size',
+                est: '~75% reduction',
+              },
+            ].map((lvl) => (
+              <div
+                key={lvl.id}
+                onClick={() => setCompressLevel(lvl.id)}
+                className={`p-3 rounded border cursor-pointer transition-colors min-h-[44px] ${
+                  compressLevel === lvl.id
+                    ? 'bg-kraft border-rule-strong shadow-sm'
+                    : 'bg-paper/80 border-rule hover:bg-kraft/40'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-ink">
+                    {lvl.label}
+                  </span>
+                  <span className="text-[10px] font-mono text-moss font-semibold">
+                    {lvl.est}
+                  </span>
+                </div>
+                <p className="text-[11px] text-ink-soft mt-1 leading-snug">
+                  {lvl.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 2. PROTECT OPTIONS */}
+      {currentTool.id === 'protect' && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Set Password
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={protectPassword}
+                onChange={(e) => setProtectPassword(e.target.value)}
+                placeholder="Enter secret passphrase..."
+                className="w-full pl-3 pr-9 py-2 rounded border border-rule bg-paper text-sm sm:text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan min-h-[44px]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-ink-faint hover:text-ink min-w-[40px] min-h-[40px] justify-center"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Confirm Password
+            </label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter password to verify..."
+              className="w-full px-3 py-2 rounded border border-rule bg-paper text-sm sm:text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan min-h-[44px]"
+            />
+          </div>
+
+          <div className="pt-2 border-t border-rule space-y-2">
+            <label className="block text-xs font-semibold text-ink">
+              Permission Controls
+            </label>
+            <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer min-h-[36px]">
+              <input
+                type="checkbox"
+                checked={allowPrinting}
+                onChange={(e) => setAllowPrinting(e.target.checked)}
+                className="rounded border-rule text-red focus:ring-cyan w-4 h-4"
+              />
+              <span>Allow document printing</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer min-h-[36px]">
+              <input
+                type="checkbox"
+                checked={allowCopying}
+                onChange={(e) => setAllowCopying(e.target.checked)}
+                className="rounded border-rule text-red focus:ring-cyan w-4 h-4"
+              />
+              <span>Allow text and image extraction</span>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* 3. SPLIT OPTIONS */}
+      {currentTool.id === 'split' && (
+        <div className="space-y-3">
+          <label className="block text-xs font-semibold text-ink">
+            Page Ranges Definition
+          </label>
+          <input
+            type="text"
+            value={splitRange}
+            onChange={(e) => setSplitRange(e.target.value)}
+            placeholder="e.g. 1-3, 5, 8-12"
+            className="w-full px-3 py-2 rounded border border-rule bg-paper text-sm sm:text-xs text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan min-h-[44px]"
+          />
+          <p className="text-[11px] text-ink-soft font-mono">
+            Synced with visual cutter: click dividers or toggle selection mode to choose pages.
+          </p>
+        </div>
+      )}
+
+      {/* 4. ROTATE OPTIONS */}
+      {currentTool.id === 'rotate' && (
+        <div className="space-y-3">
+          <label className="block text-xs font-semibold text-ink">
+            Clockwise Angle
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {[90, 180, 270].map((deg) => (
+              <button
+                key={deg}
+                type="button"
+                onClick={() => setRotateAngle(deg)}
+                className={`py-2 px-2 text-xs font-mono rounded border transition-colors min-h-[44px] ${
+                  rotateAngle === deg
+                    ? 'bg-kraft border-rule-strong text-ink font-semibold'
+                    : 'bg-paper border-rule text-ink-soft hover:bg-kraft/50'
+                }`}
+              >
+                {deg}°
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 5. WATERMARK OPTIONS */}
+      {currentTool.id === 'watermark' && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">
+              Stamp Text
+            </label>
+            <input
+              type="text"
+              value={watermarkText}
+              onChange={(e) => setWatermarkText(e.target.value)}
+              className="w-full px-3 py-2 rounded border border-rule bg-paper text-sm sm:text-xs text-ink font-mono min-h-[44px]"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">
+              Opacity: {Math.round(watermarkOpacity * 100)}%
+            </label>
+            <input
+              type="range"
+              min="0.1"
+              max="1.0"
+              step="0.05"
+              value={watermarkOpacity}
+              onChange={(e) => setWatermarkOpacity(parseFloat(e.target.value))}
+              className="w-full accent-red h-8"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">
+              Angle: {watermarkRotation}°
+            </label>
+            <input
+              type="range"
+              min="-90"
+              max="90"
+              step="15"
+              value={watermarkRotation}
+              onChange={(e) => setWatermarkRotation(parseInt(e.target.value))}
+              className="w-full accent-red h-8"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">
+              Stamp Color
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={watermarkColor}
+                onChange={(e) => setWatermarkColor(e.target.value)}
+                className="w-9 h-9 rounded border border-rule cursor-pointer"
+              />
+              <span className="font-mono text-xs text-ink">{watermarkColor}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. CONVERT OPTIONS */}
+      {currentTool.id === 'to-images' && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Plate Format
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {['png', 'jpeg'].map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => setImageFormat(fmt)}
+                  className={`py-2 text-xs font-mono uppercase rounded border min-h-[44px] ${
+                    imageFormat === fmt
+                      ? 'bg-kraft border-rule-strong text-ink font-semibold'
+                      : 'bg-paper border-rule text-ink-soft'
+                  }`}
+                >
+                  {fmt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Plate Resolution
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[100, 150, 300].map((dpi) => (
+                <button
+                  key={dpi}
+                  type="button"
+                  onClick={() => setImageDpi(dpi)}
+                  className={`py-2 text-xs font-mono rounded border min-h-[44px] ${
+                    imageDpi === dpi
+                      ? 'bg-kraft border-rule-strong text-ink font-semibold'
+                      : 'bg-paper border-rule text-ink-soft'
+                  }`}
+                >
+                  {dpi} DPI
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. CANARY WATERMARK FORENSICS */}
+      {currentTool.id === 'canary' && (
+        <div className="space-y-3">
+          <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-moss" />
+            <span>Forensic Attribution</span>
+          </span>
+          <input
+            type="text"
+            value={canaryRecipientName}
+            onChange={(e) => setCanaryRecipientName(e.target.value)}
+            placeholder="Recipient full name"
+            className="w-full px-3 py-2 rounded border border-rule bg-paper text-sm sm:text-xs text-ink min-h-[44px]"
+          />
+          <input
+            type="email"
+            value={canaryRecipientEmail}
+            onChange={(e) => setCanaryRecipientEmail(e.target.value)}
+            placeholder="Recipient email address"
+            className="w-full px-3 py-2 rounded border border-rule bg-paper text-sm sm:text-xs text-ink min-h-[44px]"
+          />
+          <input
+            type="text"
+            value={canaryOrganization}
+            onChange={(e) => setCanaryOrganization(e.target.value)}
+            placeholder="Organization or team"
+            className="w-full px-3 py-2 rounded border border-rule bg-paper text-sm sm:text-xs text-ink min-h-[44px]"
+          />
+          <input
+            type="text"
+            value={canaryTrackingNote}
+            onChange={(e) => setCanaryTrackingNote(e.target.value)}
+            placeholder="Classification note (e.g. M&A Draft)"
+            className="w-full px-3 py-2 rounded border border-rule bg-paper text-sm sm:text-xs text-ink min-h-[44px]"
+          />
+        </div>
+      )}
+    </>
+  );
 
   const totalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0);
 
@@ -620,6 +1067,34 @@ export default function ToolRunner() {
                 className="hidden"
               />
 
+              {/* Collapsed Mobile Options Summary Bar (< lg) */}
+              <div className="block lg:hidden p-3 rounded border border-rule bg-vellum shadow-subtle">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <SlidersHorizontal className="w-4 h-4 text-ink-soft shrink-0" />
+                    <span className="text-xs font-semibold text-ink shrink-0">Options:</span>
+                    <span className="font-mono text-xs text-ink-soft truncate">
+                      {getOptionsSummary()}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileOptionsOpen(true)}
+                    className="px-3 py-1.5 rounded border border-rule bg-paper hover:bg-kraft text-xs font-mono font-semibold text-ink min-h-[36px] shrink-0 active:scale-[0.98]"
+                  >
+                    Configure
+                  </button>
+                </div>
+              </div>
+
+              {/* Large File Warning Banner */}
+              {totalBytes > 50 * 1024 * 1024 && (
+                <div className="p-3 rounded border border-rule bg-kraft/60 text-xs font-mono text-ink flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-marigold shrink-0" />
+                  <span>Large folio footprint ({formatBytes(totalBytes)}). Processing memory-mapped streams.</span>
+                </div>
+              )}
+
               {/* Tool-Specific Interactive Work Area */}
 
               {/* 1. MERGE: Reorderable List of Files with Page Count */}
@@ -671,27 +1146,39 @@ export default function ToolRunner() {
                             </div>
                           </div>
 
-                          {/* Reorder & Remove Controls */}
+                          {/* Reorder & Remove Controls (44px touch-friendly) */}
                           <div className="flex items-center gap-1 shrink-0">
                             <button
+                              type="button"
+                              onClick={() => moveFileToEdge(idx, true)}
+                              disabled={idx === 0}
+                              className="px-2 py-1 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30 min-h-[36px] flex items-center justify-center text-[10px] font-mono"
+                              title="Move to top"
+                            >
+                              Top
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => moveFile(idx, -1)}
                               disabled={idx === 0}
-                              className="p-1 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30"
+                              className="p-2 sm:p-1.5 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30 min-w-[36px] min-h-[36px] flex items-center justify-center"
                               title="Move folio up"
                             >
                               <MoveUp className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => moveFile(idx, 1)}
                               disabled={idx === selectedFiles.length - 1}
-                              className="p-1 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30"
+                              className="p-2 sm:p-1.5 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30 min-w-[36px] min-h-[36px] flex items-center justify-center"
                               title="Move folio down"
                             >
                               <MoveDown className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => removeFile(idx)}
-                              className="p-1 rounded border border-rule hover:bg-red/10 text-red ml-1"
+                              className="p-2 sm:p-1.5 rounded border border-rule hover:bg-red/10 text-red ml-1 min-w-[36px] min-h-[36px] flex items-center justify-center"
                               title="Remove folio"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -704,15 +1191,74 @@ export default function ToolRunner() {
                 </div>
               )}
 
-              {/* 2. SPLIT: Visual Page Picker with Cut Lines & Scissors */}
+              {/* 2. SPLIT: Visual Page Picker with Cut Lines & Scissors & Tap Mode */}
               {currentTool.id === 'split' && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-ink-soft font-mono">
-                      Click between pages to toggle precision cuts, or specify ranges in the panel:
-                    </p>
+                  {/* Split Mode Switcher: Cut (Scissors) vs Tap to Select */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-rule pb-3">
+                    <div className="flex items-center gap-1.5 p-1 rounded bg-paper border border-rule">
+                      <button
+                        type="button"
+                        onClick={() => setSplitInteraction('cut')}
+                        className={`px-3 py-1.5 rounded text-xs font-mono transition-colors min-h-[36px] flex items-center gap-1.5 ${
+                          splitInteraction === 'cut'
+                            ? 'bg-ink text-paper font-semibold'
+                            : 'text-ink-soft hover:text-ink'
+                        }`}
+                      >
+                        <Scissors className="w-3.5 h-3.5" />
+                        <span>Cut Mode</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSplitInteraction('select')}
+                        className={`px-3 py-1.5 rounded text-xs font-mono transition-colors min-h-[36px] flex items-center gap-1.5 ${
+                          splitInteraction === 'select'
+                            ? 'bg-ink text-paper font-semibold'
+                            : 'text-ink-soft hover:text-ink'
+                        }`}
+                      >
+                        <CheckSquare className="w-3.5 h-3.5" />
+                        <span>Select Pages</span>
+                      </button>
+                    </div>
+
+                    {splitInteraction === 'select' && (
+                      <div className="flex items-center gap-1 text-[11px] font-mono">
+                        <span className="text-ink-faint mr-1">Select:</span>
+                        <button
+                          type="button"
+                          onClick={() => quickSelectPages('all')}
+                          className="px-2 py-1 rounded border border-rule bg-paper hover:bg-kraft text-ink"
+                        >
+                          All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => quickSelectPages('none')}
+                          className="px-2 py-1 rounded border border-rule bg-paper hover:bg-kraft text-ink"
+                        >
+                          None
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => quickSelectPages('odd')}
+                          className="px-2 py-1 rounded border border-rule bg-paper hover:bg-kraft text-ink"
+                        >
+                          Odd
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => quickSelectPages('even')}
+                          className="px-2 py-1 rounded border border-rule bg-paper hover:bg-kraft text-ink"
+                        >
+                          Even
+                        </button>
+                      </div>
+                    )}
+
                     <span className="text-xs font-mono text-ink font-semibold">
-                      Total Pages: {splitPageCount}
+                      Total Folios: {splitPageCount}
                     </span>
                   </div>
 
@@ -721,14 +1267,30 @@ export default function ToolRunner() {
                     {Array.from({ length: Math.min(splitPageCount, 32) }).map((_, pIdx) => {
                       const pageNum = pIdx + 1;
                       const hasCut = cutPoints.has(pageNum);
+                      const isSelected = selectedPages.has(pageNum);
                       const file = selectedFiles[0];
                       const thumb = thumbnails[`${file?.name}-${file?.size}`];
 
                       return (
                         <React.Fragment key={pageNum}>
                           {/* Page Thumbnail */}
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="w-16 h-22 rounded border border-rule bg-paper shadow-sm flex items-center justify-center overflow-hidden relative group">
+                          <div
+                            onClick={() => {
+                              if (splitInteraction === 'select') {
+                                toggleSelectPage(pageNum);
+                              }
+                            }}
+                            className={`flex flex-col items-center gap-1 ${
+                              splitInteraction === 'select' ? 'cursor-pointer' : ''
+                            }`}
+                          >
+                            <div
+                              className={`w-16 h-22 rounded border shadow-sm flex items-center justify-center overflow-hidden relative group transition-all ${
+                                splitInteraction === 'select' && isSelected
+                                  ? 'border-red bg-red/10 ring-2 ring-red/30'
+                                  : 'border-rule bg-paper'
+                              }`}
+                            >
                               {thumb ? (
                                 <img
                                   src={thumb}
@@ -740,17 +1302,25 @@ export default function ToolRunner() {
                                   #{pageNum}
                                 </span>
                               )}
+
+                              {splitInteraction === 'select' && isSelected && (
+                                <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red text-vellum flex items-center justify-center">
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                </div>
+                              )}
+
                               <span className="absolute bottom-1 right-1 text-[9px] font-mono px-1 rounded bg-ink/70 text-vellum">
                                 {pageNum}
                               </span>
                             </div>
                           </div>
 
-                          {/* Cut Separator Line */}
-                          {pageNum < splitPageCount && (
+                          {/* Cut Separator Line (44px hit-target for touch) */}
+                          {splitInteraction === 'cut' && pageNum < splitPageCount && (
                             <button
+                              type="button"
                               onClick={() => toggleCut(pageNum)}
-                              className={`h-22 w-6 flex flex-col items-center justify-center group relative cursor-pointer focus:outline-none transition-colors ${
+                              className={`h-22 min-w-[44px] px-2 flex flex-col items-center justify-center group relative cursor-pointer focus:outline-none transition-colors active:scale-95 ${
                                 hasCut ? 'text-red' : 'text-rule-strong hover:text-ink'
                               }`}
                               title={
@@ -831,7 +1401,7 @@ export default function ToolRunner() {
             </div>
 
             {/* Right Area (4 cols on desktop): Sticky Options Panel */}
-            <div className="lg:col-span-4 sticky top-20 space-y-4">
+            <div className="hidden lg:block lg:col-span-4 sticky top-20 space-y-4">
               <div className="p-5 rounded-md border border-rule bg-vellum shadow-subtle space-y-5">
                 <div className="flex items-center justify-between border-b border-rule pb-3">
                   <span className="font-display text-base text-ink font-semibold">
@@ -842,311 +1412,53 @@ export default function ToolRunner() {
                   </span>
                 </div>
 
-                {/* 1. COMPRESS OPTIONS */}
-                {currentTool.id === 'compress' && (
-                  <div className="space-y-3">
-                    <label className="block text-xs font-semibold text-ink">
-                      Compression Calibration
-                    </label>
-                    <div className="space-y-2">
-                      {[
-                        {
-                          id: 'low',
-                          label: 'Low Compression',
-                          desc: 'Preserves 300 DPI vectors & image plates',
-                          est: '~20% reduction',
-                        },
-                        {
-                          id: 'medium',
-                          label: 'Balanced (Standard)',
-                          desc: 'Recommended for archiving & email delivery',
-                          est: '~50% reduction',
-                        },
-                        {
-                          id: 'high',
-                          label: 'High Compression',
-                          desc: 'Downsamples to 150 DPI for smallest size',
-                          est: '~75% reduction',
-                        },
-                      ].map((lvl) => (
-                        <div
-                          key={lvl.id}
-                          onClick={() => setCompressLevel(lvl.id)}
-                          className={`p-3 rounded border cursor-pointer transition-colors ${
-                            compressLevel === lvl.id
-                              ? 'bg-kraft border-rule-strong shadow-sm'
-                              : 'bg-paper/80 border-rule hover:bg-kraft/40'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-ink">
-                              {lvl.label}
-                            </span>
-                            <span className="text-[10px] font-mono text-moss font-semibold">
-                              {lvl.est}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-ink-soft mt-1 leading-snug">
-                            {lvl.desc}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {renderOptionsContent()}
+              </div>
+            </div>
+          </div>
+        )}
 
-                {/* 2. PROTECT OPTIONS */}
-                {currentTool.id === 'protect' && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-ink mb-1.5">
-                        Set Password
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          value={protectPassword}
-                          onChange={(e) => setProtectPassword(e.target.value)}
-                          placeholder="Enter secret passphrase..."
-                          className="w-full pl-3 pr-9 py-2 rounded border border-rule bg-paper text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-ink-faint hover:text-ink"
-                        >
-                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
+        {/* MOBILE OPTIONS BOTTOM SHEET (< lg) */}
+        {isMobileOptionsOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bench Configuration Options"
+            className="fixed inset-0 z-50 bg-ink/70 backdrop-blur-xs flex flex-col justify-end lg:hidden animate-fade-in"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsMobileOptionsOpen(false);
+            }}
+          >
+            <div
+              className="bg-paper border-t border-rule rounded-t-xl shadow-elevation p-5 max-h-[85vh] overflow-y-auto space-y-5 animate-slide-up"
+              style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }}
+            >
+              <div className="flex items-center justify-between border-b border-rule pb-3">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-ink-soft" />
+                  <span className="font-display text-base text-ink font-semibold">
+                    Bench Configuration
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileOptionsOpen(false)}
+                  className="p-1 rounded text-ink-soft hover:text-ink min-w-[36px] min-h-[36px] flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-ink mb-1.5">
-                        Confirm Password
-                      </label>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter password to verify..."
-                        className="w-full px-3 py-2 rounded border border-rule bg-paper text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan"
-                      />
-                    </div>
+              {renderOptionsContent()}
 
-                    <div className="pt-2 border-t border-rule space-y-2">
-                      <label className="block text-xs font-semibold text-ink">
-                        Permission Controls
-                      </label>
-                      <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={allowPrinting}
-                          onChange={(e) => setAllowPrinting(e.target.checked)}
-                          className="rounded border-rule text-red focus:ring-cyan"
-                        />
-                        <span>Allow document printing</span>
-                      </label>
-                      <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={allowCopying}
-                          onChange={(e) => setAllowCopying(e.target.checked)}
-                          className="rounded border-rule text-red focus:ring-cyan"
-                        />
-                        <span>Allow text and image extraction</span>
-                      </label>
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. SPLIT OPTIONS */}
-                {currentTool.id === 'split' && (
-                  <div className="space-y-3">
-                    <label className="block text-xs font-semibold text-ink">
-                      Page Ranges Definition
-                    </label>
-                    <input
-                      type="text"
-                      value={splitRange}
-                      onChange={(e) => setSplitRange(e.target.value)}
-                      placeholder="e.g. 1-3, 5, 8-12"
-                      className="w-full px-3 py-2 rounded border border-rule bg-paper text-xs text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan"
-                    />
-                    <p className="text-[11px] text-ink-soft font-mono">
-                      Synced with visual cutter: click dividers on the left or type comma-separated ranges.
-                    </p>
-                  </div>
-                )}
-
-                {/* 4. ROTATE OPTIONS */}
-                {currentTool.id === 'rotate' && (
-                  <div className="space-y-3">
-                    <label className="block text-xs font-semibold text-ink">
-                      Clockwise Angle
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[90, 180, 270].map((deg) => (
-                        <button
-                          key={deg}
-                          type="button"
-                          onClick={() => setRotateAngle(deg)}
-                          className={`py-2 px-2 text-xs font-mono rounded border transition-colors ${
-                            rotateAngle === deg
-                              ? 'bg-kraft border-rule-strong text-ink font-semibold'
-                              : 'bg-paper border-rule text-ink-soft hover:bg-kraft/50'
-                          }`}
-                        >
-                          {deg}°
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 5. WATERMARK OPTIONS */}
-                {currentTool.id === 'watermark' && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">
-                        Stamp Text
-                      </label>
-                      <input
-                        type="text"
-                        value={watermarkText}
-                        onChange={(e) => setWatermarkText(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded border border-rule bg-paper text-xs text-ink font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">
-                        Opacity: {Math.round(watermarkOpacity * 100)}%
-                      </label>
-                      <input
-                        type="range"
-                        min="0.1"
-                        max="1.0"
-                        step="0.05"
-                        value={watermarkOpacity}
-                        onChange={(e) => setWatermarkOpacity(parseFloat(e.target.value))}
-                        className="w-full accent-red"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">
-                        Angle: {watermarkRotation}°
-                      </label>
-                      <input
-                        type="range"
-                        min="-90"
-                        max="90"
-                        step="15"
-                        value={watermarkRotation}
-                        onChange={(e) => setWatermarkRotation(parseInt(e.target.value))}
-                        className="w-full accent-red"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-ink mb-1">
-                        Stamp Color
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={watermarkColor}
-                          onChange={(e) => setWatermarkColor(e.target.value)}
-                          className="w-7 h-7 rounded border border-rule cursor-pointer"
-                        />
-                        <span className="font-mono text-xs text-ink">{watermarkColor}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 6. CONVERT OPTIONS */}
-                {currentTool.id === 'to-images' && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-ink mb-1.5">
-                        Plate Format
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {['png', 'jpeg'].map((fmt) => (
-                          <button
-                            key={fmt}
-                            type="button"
-                            onClick={() => setImageFormat(fmt)}
-                            className={`py-1.5 text-xs font-mono uppercase rounded border ${
-                              imageFormat === fmt
-                                ? 'bg-kraft border-rule-strong text-ink font-semibold'
-                                : 'bg-paper border-rule text-ink-soft'
-                            }`}
-                          >
-                            {fmt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-ink mb-1.5">
-                        Plate Resolution
-                      </label>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {[100, 150, 300].map((dpi) => (
-                          <button
-                            key={dpi}
-                            type="button"
-                            onClick={() => setImageDpi(dpi)}
-                            className={`py-1 text-xs font-mono rounded border ${
-                              imageDpi === dpi
-                                ? 'bg-kraft border-rule-strong text-ink font-semibold'
-                                : 'bg-paper border-rule text-ink-soft'
-                            }`}
-                          >
-                            {dpi} DPI
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 7. CANARY WATERMARK FORENSICS */}
-                {currentTool.id === 'canary' && (
-                  <div className="space-y-3">
-                    <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 text-moss" />
-                      <span>Forensic Attribution</span>
-                    </span>
-                    <input
-                      type="text"
-                      value={canaryRecipientName}
-                      onChange={(e) => setCanaryRecipientName(e.target.value)}
-                      placeholder="Recipient full name"
-                      className="w-full px-2.5 py-1.5 rounded border border-rule bg-paper text-xs text-ink"
-                    />
-                    <input
-                      type="email"
-                      value={canaryRecipientEmail}
-                      onChange={(e) => setCanaryRecipientEmail(e.target.value)}
-                      placeholder="Recipient email address"
-                      className="w-full px-2.5 py-1.5 rounded border border-rule bg-paper text-xs text-ink"
-                    />
-                    <input
-                      type="text"
-                      value={canaryOrganization}
-                      onChange={(e) => setCanaryOrganization(e.target.value)}
-                      placeholder="Organization or team"
-                      className="w-full px-2.5 py-1.5 rounded border border-rule bg-paper text-xs text-ink"
-                    />
-                    <input
-                      type="text"
-                      value={canaryTrackingNote}
-                      onChange={(e) => setCanaryTrackingNote(e.target.value)}
-                      placeholder="Classification note (e.g. M&A Draft)"
-                      className="w-full px-2.5 py-1.5 rounded border border-rule bg-paper text-xs text-ink"
-                    />
-                  </div>
-                )}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileOptionsOpen(false)}
+                  className="w-full py-2.5 rounded bg-ink text-paper text-xs font-semibold font-mono min-h-[44px]"
+                >
+                  Done Configuring
+                </button>
               </div>
             </div>
           </div>
@@ -1238,23 +1550,35 @@ export default function ToolRunner() {
                 )}
               </div>
 
-              {/* Action Buttons: Download + Vault + Start Over */}
+              {/* Action Buttons: Download + Share + Vault + Start Over */}
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 {resultData.download_url && (
                   <a
                     href={resultData.download_url}
                     download={resultData.output_filename || 'document.pdf'}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px"
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px min-h-[44px]"
                   >
-                    <Download className="w-3.5 h-3.5" strokeWidth={2} />
+                    <Download className="w-4 h-4" strokeWidth={2} />
                     <span>Download Folio</span>
                     <ArrowRight className="w-3.5 h-3.5 ml-1 transition-transform group-hover:translate-x-1" />
                   </a>
                 )}
 
+                {resultData.download_url && (
+                  <button
+                    type="button"
+                    onClick={handleShareResult}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded border border-rule bg-paper hover:bg-kraft active:bg-kraft/70 text-ink font-semibold text-xs font-mono transition-colors min-h-[44px]"
+                    title="Share folio or copy download link"
+                  >
+                    <Share2 className="w-4 h-4 text-ink-soft" strokeWidth={1.75} />
+                    <span>Share Folio</span>
+                  </button>
+                )}
+
                 <button
                   onClick={resetBench}
-                  className="px-4 py-2.5 rounded border border-rule bg-paper hover:bg-kraft text-ink text-xs font-mono transition-colors"
+                  className="px-4 py-2.5 rounded border border-rule bg-paper hover:bg-kraft text-ink text-xs font-mono transition-colors min-h-[44px]"
                 >
                   Start Over
                 </button>
@@ -1262,7 +1586,7 @@ export default function ToolRunner() {
                 {isAuthenticated && (
                   <Link
                     to="/workspace"
-                    className="px-4 py-2.5 rounded border border-rule bg-paper hover:bg-kraft text-ink text-xs font-mono transition-colors flex items-center gap-1.5"
+                    className="px-4 py-2.5 rounded border border-rule bg-paper hover:bg-kraft text-ink text-xs font-mono transition-colors flex items-center gap-1.5 min-h-[44px]"
                   >
                     <FolderLock className="w-3.5 h-3.5 text-ink-soft" />
                     <span>View in Vault</span>
@@ -1319,9 +1643,12 @@ export default function ToolRunner() {
 
       {/* STICKY BOTTOM ACTION BAR (During Phase 2 Configure) */}
       {selectedFiles.length > 0 && !resultData && (
-        <div className="fixed bottom-0 inset-x-0 z-30 bg-vellum/95 backdrop-blur-md border-t border-rule py-3 px-4 sm:px-6 shadow-ink-lift">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+        <div
+          className="fixed bottom-0 inset-x-0 z-30 bg-vellum/95 backdrop-blur-md border-t border-rule py-3 px-4 sm:px-6 shadow-ink-lift"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
               <span className="text-xs font-semibold text-ink">
                 {selectedFiles.length} {selectedFiles.length === 1 ? 'folio' : 'folios'}
               </span>
@@ -1338,17 +1665,19 @@ export default function ToolRunner() {
             <div className="flex items-center gap-2">
               {isProcessing && (
                 <button
+                  type="button"
                   onClick={handleCancel}
-                  className="px-3 py-2 rounded border border-rule bg-paper text-ink-soft hover:text-ink text-xs font-mono transition-colors"
+                  className="px-3 py-2 rounded border border-rule bg-paper text-ink-soft hover:text-ink text-xs font-mono transition-colors min-h-[44px]"
                 >
                   Cancel
                 </button>
               )}
 
               <button
+                type="button"
                 onClick={handleExecute}
                 disabled={isProcessing}
-                className="px-6 py-2.5 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px flex items-center gap-2 disabled:opacity-50"
+                className="px-5 sm:px-6 py-2.5 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px flex items-center justify-center gap-2 disabled:opacity-50 min-h-[44px]"
               >
                 {isProcessing ? (
                   <>
