@@ -1,15 +1,16 @@
-import React, { useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Layers,
-  FileText,
+  Scissors,
   Minimize2,
   Lock,
   RotateCw,
-  Sparkles,
+  Stamp,
   Image as ImageIcon,
-  FileCode,
-  FileSpreadsheet,
+  FileImage,
+  FileText,
+  FileInput,
   UploadCloud,
   CheckCircle2,
   AlertCircle,
@@ -26,7 +27,14 @@ import {
   ArrowLeft,
   ShieldCheck,
   ShieldAlert,
-  Fingerprint
+  Fingerprint,
+  ChevronRight,
+  SlidersHorizontal,
+  X,
+  FileCheck,
+  WifiOff,
+  CornerDownRight,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -41,153 +49,57 @@ import {
   processPdfToWord,
   processWordToPdf,
   embedCanaryWatermark,
-  verifyCanaryDocument
+  verifyCanaryDocument,
 } from '../services/api';
+import { BINDERY_TOOLS } from '../config/tools';
+import { renderPdfThumbnail, getPdfPageCount } from '../utils/pdfThumbnails';
 
-const TOOL_CONFIGS = {
-  merge: {
-    id: 'merge',
-    title: 'Merge PDF Documents',
-    description: 'Combine multiple PDF files into a single, cohesive document with custom page ordering.',
-    icon: Layers,
-    accept: '.pdf',
-    multiple: true,
-    actionBtn: 'Merge Documents',
-    api: processMergePDF,
-  },
-  split: {
-    id: 'split',
-    title: 'Split & Extract Pages',
-    description: 'Extract specific pages, divide into chapters, or split entire document into individual pages.',
-    icon: FileText,
-    accept: '.pdf',
-    multiple: false,
-    actionBtn: 'Split Document',
-    api: processSplitPDF,
-  },
-  rotate: {
-    id: 'rotate',
-    title: 'Rotate PDF',
-    description: 'Rotate PDF pages by 90°, 180°, or 270° clockwise with permanent stream preservation.',
-    icon: RotateCw,
-    accept: '.pdf',
-    multiple: false,
-    actionBtn: 'Rotate Document',
-    api: processRotatePDF,
-  },
-  protect: {
-    id: 'protect',
-    title: 'Protect & Encrypt PDF',
-    description: 'Encrypt your PDF with standard AES encryption and a secure user password.',
-    icon: Lock,
-    accept: '.pdf',
-    multiple: false,
-    actionBtn: 'Encrypt Document',
-    api: processProtectPDF,
-  },
-  compress: {
-    id: 'compress',
-    title: 'Compress PDF',
-    description: 'Optimize streams and downsample resolution to minimize file size while preserving legibility.',
-    icon: Minimize2,
-    accept: '.pdf',
-    multiple: false,
-    actionBtn: 'Compress Document',
-    api: processCompressPDF,
-  },
-  watermark: {
-    id: 'watermark',
-    title: 'Watermark PDF',
-    description: 'Stamp custom text watermarks with full control over opacity, angle, size, and placement.',
-    icon: Sparkles,
-    accept: '.pdf',
-    multiple: false,
-    actionBtn: 'Apply Watermark',
-    api: processWatermarkPDF,
-  },
-  'to-images': {
-    id: 'to-images',
-    title: 'PDF to Images',
-    description: 'Render PDF pages into high-resolution PNG or JPEG images bundled in a ZIP archive.',
-    icon: ImageIcon,
-    accept: '.pdf',
-    multiple: false,
-    actionBtn: 'Convert to Images',
-    api: processPdfToImages,
-  },
-  'from-images': {
-    id: 'from-images',
-    title: 'Images to PDF',
-    description: 'Combine multiple JPEG or PNG images into a single standardized PDF document.',
-    icon: ImageIcon,
-    accept: '.jpg,.jpeg,.png',
-    multiple: true,
-    actionBtn: 'Generate PDF',
-    api: processImagesToPdf,
-  },
-  'to-word': {
-    id: 'to-word',
-    title: 'PDF to Word DOCX',
-    description: 'Convert PDF documents into editable Microsoft Word documents preserving textual structure.',
-    icon: FileCode,
-    accept: '.pdf',
-    multiple: false,
-    actionBtn: 'Convert to Word',
-    api: processPdfToWord,
-  },
-  'from-word': {
-    id: 'from-word',
-    title: 'Word to PDF',
-    description: 'Convert DOCX documents into clean, standardized PDF files via serverless engine.',
-    icon: FileSpreadsheet,
-    accept: '.docx',
-    multiple: false,
-    actionBtn: 'Convert to PDF',
-    api: processWordToPdf,
-  },
-  canary: {
-    id: 'canary',
-    title: 'Invisible Canary Watermark',
-    description: 'Embed a cryptographically secure, resilient forensic watermark to trace and identify confidential document leaks.',
-    icon: ShieldCheck,
-    accept: '.pdf',
-    multiple: false,
-    actionBtn: 'Generate Canary Watermark',
-    api: embedCanaryWatermark,
-  },
-  'verify-canary': {
-    id: 'verify-canary',
-    title: 'Forensic Document Verifier',
-    description: 'Upload a suspected leaked PDF to scan for multi-layer invisible markers, verify cryptographic token integrity, and resolve attribution.',
-    icon: ShieldAlert,
-    accept: '.pdf',
-    multiple: false,
-    actionBtn: 'Scan & Verify Document',
-    api: verifyCanaryDocument,
-  },
-};
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
-export const ToolRunner = () => {
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+export default function ToolRunner() {
   const { toolId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const config = TOOL_CONFIGS[toolId] || TOOL_CONFIGS.merge;
-  const ToolIcon = config.icon;
+
+  // Find tool specification
+  const currentTool =
+    BINDERY_TOOLS.find((t) => t.id === toolId) || BINDERY_TOOLS[0];
+  const ToolIcon = currentTool.icon;
 
   // File state
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [thumbnails, setThumbnails] = useState({});
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Split-specific page state
+  const [splitPageCount, setSplitPageCount] = useState(1);
+  const [cutPoints, setCutPoints] = useState(new Set()); // Cuts after page N
+  const [splitMode, setSplitMode] = useState('ranges'); // 'ranges', 'every_n', 'selected'
+  const [everyNPages, setEveryNPages] = useState(1);
+  const [splitRange, setSplitRange] = useState('');
 
   // Tool specific options
   const [rotateAngle, setRotateAngle] = useState(90);
   const [protectPassword, setProtectPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [allowPrinting, setAllowPrinting] = useState(true);
+  const [allowCopying, setAllowCopying] = useState(true);
   const [compressLevel, setCompressLevel] = useState('medium');
   const [watermarkText, setWatermarkText] = useState('CONFIDENTIAL');
   const [watermarkOpacity, setWatermarkOpacity] = useState(0.3);
   const [watermarkRotation, setWatermarkRotation] = useState(45);
-  const [watermarkColor, setWatermarkColor] = useState('#FF0000');
-  const [splitRange, setSplitRange] = useState('');
+  const [watermarkColor, setWatermarkColor] = useState('#D9441F');
   const [imageFormat, setImageFormat] = useState('png');
   const [imageDpi, setImageDpi] = useState(150);
   const [canaryRecipientName, setCanaryRecipientName] = useState('');
@@ -195,17 +107,133 @@ export const ToolRunner = () => {
   const [canaryOrganization, setCanaryOrganization] = useState('');
   const [canaryTrackingNote, setCanaryTrackingNote] = useState('');
 
-  // Execution state
+  // Password-protected PDF prompt state
+  const [pdfPasswordPrompt, setPdfPasswordPrompt] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+
+  // Execution & Progress state
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [resultData, setResultData] = useState(null);
+  const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const abortControllerRef = useRef(null);
+
+  // Detect offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Preload files from Home page navigation
+  useEffect(() => {
+    if (location.state?.preloadedFiles?.length) {
+      handleFiles(location.state.preloadedFiles);
+    }
+  }, [location.state]);
+
+  // Load thumbnails for selected files
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadThumbnails() {
+      for (const file of selectedFiles) {
+        const key = `${file.name}-${file.size}`;
+        if (!thumbnails[key]) {
+          if (file.name.toLowerCase().endsWith('.pdf')) {
+            const thumbUrl = await renderPdfThumbnail(file, 1);
+            if (!isCancelled && thumbUrl) {
+              setThumbnails((prev) => ({ ...prev, [key]: thumbUrl }));
+            }
+            if (currentTool.id === 'split') {
+              const pages = await getPdfPageCount(file);
+              if (!isCancelled) setSplitPageCount(pages);
+            }
+          } else if (file.type.startsWith('image/')) {
+            const objectUrl = URL.createObjectURL(file);
+            if (!isCancelled) {
+              setThumbnails((prev) => ({ ...prev, [key]: objectUrl }));
+            }
+          }
+        }
+      }
+    }
+
+    if (selectedFiles.length > 0) {
+      loadThumbnails();
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedFiles, currentTool.id]);
+
+  // Two-way sync: cut points -> split range string
+  const toggleCut = (pageIndex) => {
+    setCutPoints((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageIndex)) {
+        next.delete(pageIndex);
+      } else {
+        next.add(pageIndex);
+      }
+
+      // Convert cut points to ranges
+      const sorted = Array.from(next).sort((a, b) => a - b);
+      let ranges = [];
+      let start = 1;
+      sorted.forEach((cut) => {
+        ranges.push(start === cut ? `${start}` : `${start}-${cut}`);
+        start = cut + 1;
+      });
+      if (start <= splitPageCount) {
+        ranges.push(start === splitPageCount ? `${start}` : `${start}-${splitPageCount}`);
+      }
+      setSplitRange(ranges.join(', '));
+      return next;
+    });
+  };
 
   const handleFiles = (newFiles) => {
     setErrorMessage('');
     const filesArray = Array.from(newFiles);
     if (!filesArray.length) return;
 
-    if (config.multiple) {
+    // Validate size limit (100 MB)
+    for (const f of filesArray) {
+      if (f.size > MAX_FILE_SIZE_BYTES) {
+        setErrorMessage(
+          `Document "${f.name}" exceeds the 100 MB size limit (${formatBytes(f.size)}).`
+        );
+        return;
+      }
+    }
+
+    // Validate file type
+    if (currentTool.accept) {
+      const allowed = currentTool.accept.split(',').map((s) => s.trim().toLowerCase());
+      for (const f of filesArray) {
+        const ext = '.' + f.name.split('.').pop().toLowerCase();
+        const matchesType = allowed.some(
+          (type) => type === ext || (type.includes('/') && f.type === type)
+        );
+        if (!matchesType && allowed.length > 0) {
+          setErrorMessage(
+            `File "${f.name}" is not supported by ${currentTool.title}. Expected ${currentTool.accept}.`
+          );
+          return;
+        }
+      }
+    }
+
+    if (currentTool.multiple) {
       setSelectedFiles((prev) => [...prev, ...filesArray]);
     } else {
       setSelectedFiles([filesArray[0]]);
@@ -236,755 +264,1108 @@ export const ToolRunner = () => {
     });
   };
 
+  // Bind API method by tool ID
+  const getToolApi = () => {
+    switch (currentTool.id) {
+      case 'merge':
+        return processMergePDF;
+      case 'split':
+        return processSplitPDF;
+      case 'rotate':
+        return processRotatePDF;
+      case 'protect':
+        return processProtectPDF;
+      case 'compress':
+        return processCompressPDF;
+      case 'watermark':
+        return processWatermarkPDF;
+      case 'to-images':
+        return processPdfToImages;
+      case 'from-images':
+        return processImagesToPdf;
+      case 'to-word':
+        return processPdfToWord;
+      case 'from-word':
+        return processWordToPdf;
+      case 'canary':
+        return embedCanaryWatermark;
+      case 'verify-canary':
+        return verifyCanaryDocument;
+      default:
+        return processMergePDF;
+    }
+  };
+
+  const handleCancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsProcessing(false);
+    setProcessingStage('Operation aborted by user.');
+  };
+
   const handleExecute = async () => {
     if (!selectedFiles.length) {
-      setErrorMessage('Please select at least one document to proceed.');
+      setErrorMessage('Please place at least one document on the bench.');
       return;
     }
 
+    if (currentTool.id === 'protect') {
+      if (!protectPassword) {
+        setErrorMessage('Please specify an encryption password.');
+        return;
+      }
+      if (confirmPassword && protectPassword !== confirmPassword) {
+        setErrorMessage('Passwords do not match.');
+        return;
+      }
+    }
+
     setIsProcessing(true);
+    setProcessingStage('Mounting document stream in RAM...');
     setErrorMessage('');
     setResultData(null);
+
+    abortControllerRef.current = new AbortController();
 
     try {
       const formData = new FormData();
 
-      if (config.multiple) {
+      if (currentTool.multiple) {
         selectedFiles.forEach((file) => formData.append('files', file));
       } else {
         formData.append('file', selectedFiles[0]);
       }
 
-      if (config.id === 'rotate') {
+      if (currentTool.id === 'rotate') {
         formData.append('angle', rotateAngle);
-      } else if (config.id === 'protect') {
-        if (!protectPassword) {
-          throw new Error('Please enter a password to encrypt this document.');
-        }
+      } else if (currentTool.id === 'protect') {
         formData.append('password', protectPassword);
-      } else if (config.id === 'compress') {
+      } else if (currentTool.id === 'compress') {
         formData.append('level', compressLevel);
-      } else if (config.id === 'watermark') {
+      } else if (currentTool.id === 'watermark') {
         formData.append('watermark_text', watermarkText);
         formData.append('opacity', watermarkOpacity);
         formData.append('rotation', watermarkRotation);
         formData.append('color', watermarkColor);
-      } else if (config.id === 'split') {
+      } else if (currentTool.id === 'split') {
         if (splitRange) {
           formData.append('page_ranges', splitRange);
         }
-      } else if (config.id === 'to-images') {
+      } else if (currentTool.id === 'to-images') {
         formData.append('format', imageFormat);
         formData.append('dpi', imageDpi);
-      } else if (config.id === 'canary') {
+      } else if (currentTool.id === 'canary') {
         if (canaryRecipientName) formData.append('recipient_name', canaryRecipientName);
         if (canaryRecipientEmail) formData.append('recipient_email', canaryRecipientEmail);
         if (canaryOrganization) formData.append('organization', canaryOrganization);
         if (canaryTrackingNote) formData.append('tracking_note', canaryTrackingNote);
       }
 
-      const res = await config.api(formData);
+      setProcessingStage(
+        currentTool.id === 'compress'
+          ? 'Compressing content streams & font subsets...'
+          : currentTool.id === 'merge'
+          ? 'Binding and interleaving folios...'
+          : currentTool.id === 'canary'
+          ? 'Computing SHA-256 and embedding invisible markers...'
+          : 'Processing document on bench...'
+      );
+
+      const apiFunc = getToolApi();
+      const res = await apiFunc(formData);
+
+      // Trigger slight haptic pulse on devices that support it
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(15);
+      }
+
       setResultData(res);
     } catch (err) {
-      console.error('Processing error:', err);
-      const detail = err.response?.data?.detail || err.message || 'Operation failed. Please verify file format.';
-      setErrorMessage(detail);
+      if (err.name === 'CanceledError' || err.name === 'AbortError') {
+        setErrorMessage('Execution cancelled.');
+      } else {
+        console.error('Processing error:', err);
+        const detail =
+          err.response?.data?.detail ||
+          err.message ||
+          'Operation failed. Please verify file integrity.';
+        if (typeof detail === 'string' && detail.toLowerCase().includes('password')) {
+          setPdfPasswordPrompt(true);
+        }
+        setErrorMessage(detail);
+      }
     } finally {
       setIsProcessing(false);
+      setProcessingStage('');
     }
   };
 
-  const resetTool = () => {
+  const resetBench = () => {
     setSelectedFiles([]);
     setResultData(null);
     setErrorMessage('');
+    setCutPoints(new Set());
+    setSplitRange('');
   };
 
-  return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      {/* Header */}
-      <div className="pb-6 border-b border-white/5">
-        <Link
-          to="/"
-          className="inline-flex items-center text-xs font-medium text-[#9E9E98] hover:text-[#E8E8E3] transition-colors mb-3 active:scale-[0.97]"
-        >
-          <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back to tools
-        </Link>
+  // Chain output file into another tool without re-uploading
+  const continueWithTool = async (targetToolId) => {
+    if (!resultData?.download_url) return;
+    try {
+      // Fetch resulting blob to pass as preloaded file
+      const response = await fetch(resultData.download_url);
+      const blob = await response.blob();
+      const filename = resultData.output_filename || 'processed.pdf';
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      navigate(`/tools/${targetToolId}`, {
+        state: { preloadedFiles: [file] },
+      });
+    } catch (err) {
+      console.error('Failed to chain document to next tool:', err);
+      navigate(`/tools/${targetToolId}`);
+    }
+  };
 
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center">
-              <ToolIcon className="w-5 h-5 mr-2.5 text-[#E8E8E3] stroke-[1.75]" />
-              {config.title}
-            </h1>
-            <p className="mt-1.5 text-xs text-[#9E9E98] leading-relaxed max-w-xl">
-              {config.description}
+  const totalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0);
+
+  return (
+    <div className="min-h-screen bg-paper text-ink pb-28 relative">
+      {/* Offline Warning Banner */}
+      {isOffline && (
+        <div className="bg-kraft border-b border-rule px-4 py-2 text-center text-xs font-mono text-ink flex items-center justify-center gap-2">
+          <WifiOff className="w-3.5 h-3.5 text-red" />
+          <span>You appear to be offline. Reconnecting to bench origin...</span>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-6">
+        {/* Navigation Breadcrumb & Tool Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-rule">
+          <div className="space-y-1">
+            <Link
+              to="/"
+              className="inline-flex items-center text-xs font-mono text-ink-soft hover:text-ink transition-colors mb-1"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Return to Bench
+            </Link>
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-8 h-8 rounded border border-rule flex items-center justify-center text-ink shrink-0"
+                style={{ backgroundColor: currentTool.tint || 'var(--kraft)' }}
+              >
+                <ToolIcon className="w-4 h-4" strokeWidth={1.5} />
+              </div>
+              <h1 className="font-display text-2xl sm:text-3xl tracking-tight text-ink">
+                {currentTool.title}
+              </h1>
+              <span className="font-mono text-[10px] uppercase tracking-mono px-2 py-0.5 rounded border border-rule bg-kraft/70 text-ink-soft">
+                {currentTool.verb}
+              </span>
+            </div>
+            <p className="text-xs text-ink-soft max-w-xl">
+              {currentTool.description}
             </p>
           </div>
-        </div>
-      </div>
 
-      {/* Main Workspace Area */}
-      {!resultData ? (
-        <div className="mt-8 space-y-6">
-          {/* Dropzone */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-200 ${
-              isDragging
-                ? 'border-white/40 bg-white/10 scale-[1.01]'
-                : 'border-white/10 bg-[#121214] hover:border-white/20 hover:bg-[#151518]'
-            }`}
-          >
+          {/* Phase Indicator Pills */}
+          <div className="flex items-center gap-1.5 font-mono text-[11px] self-start sm:self-center">
+            <span
+              className={`px-2 py-0.5 rounded border ${
+                selectedFiles.length === 0
+                  ? 'bg-ink text-paper border-ink font-semibold'
+                  : 'bg-vellum text-ink-soft border-rule'
+              }`}
+            >
+              1. Add
+            </span>
+            <ChevronRight className="w-3 h-3 text-rule-strong" />
+            <span
+              className={`px-2 py-0.5 rounded border ${
+                selectedFiles.length > 0 && !resultData
+                  ? 'bg-ink text-paper border-ink font-semibold'
+                  : 'bg-vellum text-ink-soft border-rule'
+              }`}
+            >
+              2. Configure
+            </span>
+            <ChevronRight className="w-3 h-3 text-rule-strong" />
+            <span
+              className={`px-2 py-0.5 rounded border ${
+                resultData
+                  ? 'bg-red text-vellum border-red font-semibold'
+                  : 'bg-vellum text-ink-soft border-rule'
+              }`}
+            >
+              3. Result
+            </span>
+          </div>
+        </div>
+
+        {/* PHASE 1: ADD (Empty State Dropzone) */}
+        {selectedFiles.length === 0 && !resultData && (
+          <div className="max-w-3xl mx-auto pt-6 space-y-4">
             <input
               type="file"
               ref={fileInputRef}
               onChange={(e) => handleFiles(e.target.files)}
-              accept={config.accept}
-              multiple={config.multiple}
+              accept={currentTool.accept}
+              multiple={currentTool.multiple}
               className="hidden"
             />
-            <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#E8E8E3]">
-              <UploadCloud className="w-5 h-5" />
-            </div>
-            <h3 className="text-sm font-semibold text-white">
-              Choose or drop {config.multiple ? 'files' : 'a file'} here
-            </h3>
-            <p className="mt-1 text-xs text-[#9E9E98]">
-              Browse your device or drag documents directly into this area
-            </p>
-            <p className="mt-2 text-[11px] text-[#666662]">
-              Accepts {config.accept.toUpperCase()} up to 100 MB
-            </p>
-          </div>
 
-          {/* Selected File List */}
-          {selectedFiles.length > 0 && (
-            <div className="rounded-2xl border border-white/10 bg-[#121214] p-5 space-y-3">
-              <div className="flex items-center justify-between text-xs text-[#9E9E98] pb-2 border-b border-white/5">
-                <span className="font-semibold text-white">
-                  Queued Files ({selectedFiles.length})
-                </span>
-                {config.multiple && (
-                  <span className="text-[11px] text-[#666662]">
-                    Use arrows to reorder
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              className={`relative cursor-pointer p-12 sm:p-16 rounded-md border-2 border-dashed transition-all duration-150 text-center select-none ${
+                isDragging
+                  ? 'border-red bg-kraft/70 -translate-y-0.5 shadow-ink-lift'
+                  : 'border-rule hover:border-rule-strong bg-vellum hover:bg-kraft/30 shadow-subtle'
+              }`}
+            >
+              {/* Corner Registration Marks (+) */}
+              <span className="absolute top-2 left-2 font-mono text-xs text-rule-strong">+</span>
+              <span className="absolute top-2 right-2 font-mono text-xs text-rule-strong">+</span>
+              <span className="absolute bottom-2 left-2 font-mono text-xs text-rule-strong">+</span>
+              <span className="absolute bottom-2 right-2 font-mono text-xs text-rule-strong">+</span>
+
+              <div className="max-w-md mx-auto space-y-3">
+                <div
+                  className="w-12 h-12 rounded border border-rule mx-auto flex items-center justify-center text-ink shadow-sm"
+                  style={{ backgroundColor: currentTool.tint || 'var(--paper)' }}
+                >
+                  <UploadCloud className="w-6 h-6 text-ink-soft" strokeWidth={1.5} />
+                </div>
+
+                <div>
+                  <p className="font-display text-xl text-ink">
+                    {isDragging
+                      ? 'Release to add to workbench'
+                      : `Place ${currentTool.multiple ? 'documents' : 'a document'} on the bench`}
+                  </p>
+                  <p className="text-xs text-ink-soft mt-1">
+                    Drag and drop {currentTool.accept.toUpperCase()} or click to select from storage.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-2 text-[11px] font-mono text-ink-faint">
+                  <span className="px-2 py-0.5 rounded bg-kraft/60 border border-rule">
+                    Maximum limit: 100 MB
                   </span>
-                )}
+                  <span className="px-2 py-0.5 rounded bg-kraft/60 border border-rule">
+                    Zero retention guarantee
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {errorMessage && (
+              <div className="p-3.5 rounded border border-red/40 bg-red/10 text-xs text-ink flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red" />
+                <div>
+                  <p className="font-semibold text-red">Document issue</p>
+                  <p className="text-ink-soft mt-0.5">{errorMessage}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PHASE 2: ARRANGE & CONFIGURE (Left: Thumbnails & Page Area | Right: Sticky Panel) */}
+        {selectedFiles.length > 0 && !resultData && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Area (8 cols on desktop): File & Page Workspace */}
+            <div className="lg:col-span-8 space-y-6">
+              {/* Workspace Header Actions */}
+              <div className="flex items-center justify-between p-3 rounded border border-rule bg-vellum">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-ink">
+                    Folios on Workbench ({selectedFiles.length})
+                  </span>
+                  <span className="text-xs font-mono text-ink-soft tabular-nums">
+                    [{formatBytes(totalBytes)}]
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {currentTool.multiple && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-2.5 py-1 text-xs font-mono rounded border border-rule bg-paper hover:bg-kraft text-ink transition-colors"
+                    >
+                      + Add More
+                    </button>
+                  )}
+                  <button
+                    onClick={resetBench}
+                    className="px-2.5 py-1 text-xs font-mono rounded border border-rule bg-paper hover:bg-red/10 text-red transition-colors"
+                  >
+                    Clear All
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                {selectedFiles.map((file, idx) => (
-                  <div
-                    key={`${file.name}-${idx}`}
-                    className="flex items-center justify-between p-2.5 rounded-xl border border-white/5 bg-[#161619] text-xs"
+              {/* Hidden file input for adding more */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => handleFiles(e.target.files)}
+                accept={currentTool.accept}
+                multiple={currentTool.multiple}
+                className="hidden"
+              />
+
+              {/* Tool-Specific Interactive Work Area */}
+
+              {/* 1. MERGE: Reorderable List of Files with Page Count */}
+              {currentTool.id === 'merge' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-ink-soft font-mono">
+                    Drag folios or use arrows to adjust collation sequence before binding:
+                  </p>
+                  <div className="space-y-2">
+                    {selectedFiles.map((file, idx) => {
+                      const thumbKey = `${file.name}-${file.size}`;
+                      const thumb = thumbnails[thumbKey];
+                      return (
+                        <div
+                          key={`${file.name}-${idx}`}
+                          className="flex items-center justify-between p-3 rounded border border-rule bg-vellum hover:border-rule-strong hover:shadow-subtle transition-all duration-120 group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Sequence number */}
+                            <span className="font-mono text-xs font-semibold text-ink-faint w-5 text-right shrink-0">
+                              {idx + 1}.
+                            </span>
+
+                            {/* Thumbnail or placeholder */}
+                            <div className="w-12 h-16 rounded border border-rule bg-paper flex items-center justify-center overflow-hidden shrink-0 shadow-sm relative">
+                              {thumb ? (
+                                <img
+                                  src={thumb}
+                                  alt={`Folio ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="p-1 text-center">
+                                  <FileText className="w-5 h-5 mx-auto text-ink-faint" />
+                                  <span className="text-[8px] font-mono text-ink-faint">
+                                    P.1
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="truncate">
+                              <p className="text-xs font-medium text-ink truncate">
+                                {file.name}
+                              </p>
+                              <p className="text-[11px] font-mono text-ink-soft tabular-nums mt-0.5">
+                                {formatBytes(file.size)}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Reorder & Remove Controls */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => moveFile(idx, -1)}
+                              disabled={idx === 0}
+                              className="p-1 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30"
+                              title="Move folio up"
+                            >
+                              <MoveUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => moveFile(idx, 1)}
+                              disabled={idx === selectedFiles.length - 1}
+                              className="p-1 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30"
+                              title="Move folio down"
+                            >
+                              <MoveDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => removeFile(idx)}
+                              className="p-1 rounded border border-rule hover:bg-red/10 text-red ml-1"
+                              title="Remove folio"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. SPLIT: Visual Page Picker with Cut Lines & Scissors */}
+              {currentTool.id === 'split' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-ink-soft font-mono">
+                      Click between pages to toggle precision cuts, or specify ranges in the panel:
+                    </p>
+                    <span className="text-xs font-mono text-ink font-semibold">
+                      Total Pages: {splitPageCount}
+                    </span>
+                  </div>
+
+                  {/* Grid of visual pages with cut dividers */}
+                  <div className="p-4 rounded border border-rule bg-vellum flex flex-wrap gap-4 items-center">
+                    {Array.from({ length: Math.min(splitPageCount, 32) }).map((_, pIdx) => {
+                      const pageNum = pIdx + 1;
+                      const hasCut = cutPoints.has(pageNum);
+                      const file = selectedFiles[0];
+                      const thumb = thumbnails[`${file?.name}-${file?.size}`];
+
+                      return (
+                        <React.Fragment key={pageNum}>
+                          {/* Page Thumbnail */}
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="w-16 h-22 rounded border border-rule bg-paper shadow-sm flex items-center justify-center overflow-hidden relative group">
+                              {thumb ? (
+                                <img
+                                  src={thumb}
+                                  alt={`Page ${pageNum}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="font-mono text-xs text-ink-faint">
+                                  #{pageNum}
+                                </span>
+                              )}
+                              <span className="absolute bottom-1 right-1 text-[9px] font-mono px-1 rounded bg-ink/70 text-vellum">
+                                {pageNum}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Cut Separator Line */}
+                          {pageNum < splitPageCount && (
+                            <button
+                              onClick={() => toggleCut(pageNum)}
+                              className={`h-22 w-6 flex flex-col items-center justify-center group relative cursor-pointer focus:outline-none transition-colors ${
+                                hasCut ? 'text-red' : 'text-rule-strong hover:text-ink'
+                              }`}
+                              title={
+                                hasCut
+                                  ? `Cut set after page ${pageNum}. Click to heal.`
+                                  : `Click to cut after page ${pageNum}`
+                              }
+                            >
+                              <div
+                                className={`w-0.5 h-full transition-colors ${
+                                  hasCut
+                                    ? 'bg-red border-dashed'
+                                    : 'bg-rule group-hover:bg-ink'
+                                }`}
+                              />
+                              <Scissors
+                                className={`w-3.5 h-3.5 absolute top-1/2 -translate-y-1/2 transition-transform ${
+                                  hasCut
+                                    ? 'text-red scale-110'
+                                    : 'text-rule-strong group-hover:scale-105'
+                                }`}
+                              />
+                            </button>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Generic Single Document Presentation for other tools */}
+              {currentTool.id !== 'merge' && currentTool.id !== 'split' && (
+                <div className="p-4 rounded border border-rule bg-vellum flex items-center gap-4">
+                  <div className="w-14 h-20 rounded border border-rule bg-paper shadow-sm flex items-center justify-center shrink-0 overflow-hidden">
+                    {thumbnails[`${selectedFiles[0]?.name}-${selectedFiles[0]?.size}`] ? (
+                      <img
+                        src={thumbnails[`${selectedFiles[0]?.name}-${selectedFiles[0]?.size}`]}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <ToolIcon className="w-6 h-6 text-ink-soft" strokeWidth={1.5} />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-ink truncate">
+                      {selectedFiles[0]?.name}
+                    </h3>
+                    <p className="text-xs font-mono text-ink-soft tabular-nums mt-0.5">
+                      {formatBytes(selectedFiles[0]?.size)}
+                    </p>
+                    <p className="text-[11px] text-ink-faint mt-1 font-mono">
+                      Ready for {currentTool.verb} operation on isolated RAM namespace.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Error Banner with Retry */}
+              {errorMessage && (
+                <div className="p-4 rounded border border-red/40 bg-red/10 text-xs text-ink flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red" />
+                    <div>
+                      <p className="font-semibold text-red">Execution Warning</p>
+                      <p className="text-ink-soft mt-0.5">{errorMessage}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleExecute}
+                    className="px-2.5 py-1 text-xs font-mono font-medium rounded bg-red text-vellum hover:bg-red-dark shrink-0"
                   >
-                    <div className="flex items-center space-x-2.5 truncate">
-                      <span className="text-[11px] font-mono text-[#666662] w-5 text-right shrink-0">
-                        {idx + 1}.
-                      </span>
-                      <div className="truncate">
-                        <p className="font-medium text-[#E8E8E3] truncate">{file.name}</p>
-                        <p className="text-[11px] text-[#666662]">{(file.size / 1024).toFixed(1)} KB</p>
+                    Retry
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Right Area (4 cols on desktop): Sticky Options Panel */}
+            <div className="lg:col-span-4 sticky top-20 space-y-4">
+              <div className="p-5 rounded-md border border-rule bg-vellum shadow-subtle space-y-5">
+                <div className="flex items-center justify-between border-b border-rule pb-3">
+                  <span className="font-display text-base text-ink font-semibold">
+                    Bench Configuration
+                  </span>
+                  <span className="font-mono text-[10px] uppercase text-ink-soft bg-kraft px-1.5 py-0.5 rounded border border-rule">
+                    {currentTool.badgeText || 'Bench'}
+                  </span>
+                </div>
+
+                {/* 1. COMPRESS OPTIONS */}
+                {currentTool.id === 'compress' && (
+                  <div className="space-y-3">
+                    <label className="block text-xs font-semibold text-ink">
+                      Compression Calibration
+                    </label>
+                    <div className="space-y-2">
+                      {[
+                        {
+                          id: 'low',
+                          label: 'Low Compression',
+                          desc: 'Preserves 300 DPI vectors & image plates',
+                          est: '~20% reduction',
+                        },
+                        {
+                          id: 'medium',
+                          label: 'Balanced (Standard)',
+                          desc: 'Recommended for archiving & email delivery',
+                          est: '~50% reduction',
+                        },
+                        {
+                          id: 'high',
+                          label: 'High Compression',
+                          desc: 'Downsamples to 150 DPI for smallest size',
+                          est: '~75% reduction',
+                        },
+                      ].map((lvl) => (
+                        <div
+                          key={lvl.id}
+                          onClick={() => setCompressLevel(lvl.id)}
+                          className={`p-3 rounded border cursor-pointer transition-colors ${
+                            compressLevel === lvl.id
+                              ? 'bg-kraft border-rule-strong shadow-sm'
+                              : 'bg-paper/80 border-rule hover:bg-kraft/40'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-ink">
+                              {lvl.label}
+                            </span>
+                            <span className="text-[10px] font-mono text-moss font-semibold">
+                              {lvl.est}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-ink-soft mt-1 leading-snug">
+                            {lvl.desc}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. PROTECT OPTIONS */}
+                {currentTool.id === 'protect' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-ink mb-1.5">
+                        Set Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={protectPassword}
+                          onChange={(e) => setProtectPassword(e.target.value)}
+                          placeholder="Enter secret passphrase..."
+                          className="w-full pl-3 pr-9 py-2 rounded border border-rule bg-paper text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-ink-faint hover:text-ink"
+                        >
+                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-1 shrink-0 ml-3">
-                      {config.multiple && (
-                        <>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); moveFile(idx, -1); }}
-                            disabled={idx === 0}
-                            className="p-1 rounded hover:bg-white/10 text-[#9E9E98] hover:text-white disabled:opacity-20 active:scale-[0.95]"
-                            title="Move Up"
-                          >
-                            <MoveUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); moveFile(idx, 1); }}
-                            disabled={idx === selectedFiles.length - 1}
-                            className="p-1 rounded hover:bg-white/10 text-[#9E9E98] hover:text-white disabled:opacity-20 active:scale-[0.95]"
-                            title="Move Down"
-                          >
-                            <MoveDown className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
-                        className="p-1 rounded hover:bg-rose-950/30 text-[#9E9E98] hover:text-rose-400 transition-colors active:scale-[0.95]"
-                        title="Remove Document"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <div>
+                      <label className="block text-xs font-semibold text-ink mb-1.5">
+                        Confirm Password
+                      </label>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Re-enter password to verify..."
+                        className="w-full px-3 py-2 rounded border border-rule bg-paper text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan"
+                      />
+                    </div>
+
+                    <div className="pt-2 border-t border-rule space-y-2">
+                      <label className="block text-xs font-semibold text-ink">
+                        Permission Controls
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={allowPrinting}
+                          onChange={(e) => setAllowPrinting(e.target.checked)}
+                          className="rounded border-rule text-red focus:ring-cyan"
+                        />
+                        <span>Allow document printing</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-ink-soft cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={allowCopying}
+                          onChange={(e) => setAllowCopying(e.target.checked)}
+                          className="rounded border-rule text-red focus:ring-cyan"
+                        />
+                        <span>Allow text and image extraction</span>
+                      </label>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                )}
 
-          {/* Options Panel */}
-          {config.id === 'rotate' && (
-            <div className="p-5 rounded-2xl border border-white/10 bg-[#121214]">
-              <label className="block text-xs font-semibold text-[#E8E8E3] mb-2.5">
-                Rotation Angle
-              </label>
-              <div className="grid grid-cols-3 gap-2.5 max-w-xs">
-                {[90, 180, 270].map((deg) => (
-                  <button
-                    key={deg}
-                    type="button"
-                    onClick={() => setRotateAngle(deg)}
-                    className={`py-2 px-3 rounded-xl text-xs font-medium border transition-all active:scale-[0.97] ${
-                      rotateAngle === deg
-                        ? 'bg-[#E8E8E3] border-white text-[#111113] font-semibold'
-                        : 'bg-white/5 border-white/10 text-[#9E9E98] hover:text-white'
-                    }`}
-                  >
-                    {deg}° Clockwise
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {config.id === 'protect' && (
-            <div className="p-5 rounded-2xl border border-white/10 bg-[#121214] max-w-md">
-              <label className="block text-xs font-semibold text-[#E8E8E3] mb-2">
-                Set Document Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={protectPassword}
-                  onChange={(e) => setProtectPassword(e.target.value)}
-                  placeholder="Enter a secure password..."
-                  className="w-full pl-3 pr-10 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white placeholder-[#666662] focus:outline-none focus:border-white/30"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#9E9E98] hover:text-white"
-                >
-                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-              <p className="mt-2 text-[11px] text-[#666662]">
-                Protected with standard AES encryption. Your password is never stored.
-              </p>
-            </div>
-          )}
-
-          {config.id === 'compress' && (
-            <div className="p-5 rounded-2xl border border-white/10 bg-[#121214]">
-              <label className="block text-xs font-semibold text-[#E8E8E3] mb-2.5">
-                Compression Level
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { id: 'low', label: 'Low', desc: 'Preserves maximum resolution' },
-                  { id: 'medium', label: 'Balanced', desc: 'Recommended optimization' },
-                  { id: 'high', label: 'High', desc: 'Smallest file size' },
-                ].map((lvl) => (
-                  <button
-                    key={lvl.id}
-                    type="button"
-                    onClick={() => setCompressLevel(lvl.id)}
-                    className={`p-3 text-left rounded-xl border transition-all active:scale-[0.98] ${
-                      compressLevel === lvl.id
-                        ? 'bg-white/10 border-white/30 text-white'
-                        : 'bg-white/5 border-white/10 text-[#9E9E98] hover:text-white'
-                    }`}
-                  >
-                    <p className="text-xs font-semibold">{lvl.label}</p>
-                    <p className="text-[11px] text-[#666662] mt-0.5">{lvl.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {config.id === 'watermark' && (
-            <div className="p-5 rounded-2xl border border-white/10 bg-[#121214] space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#E8E8E3] mb-1.5">
-                  Watermark Text
-                </label>
-                <input
-                  type="text"
-                  value={watermarkText}
-                  onChange={(e) => setWatermarkText(e.target.value)}
-                  className="w-full max-w-md px-3 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-white/30"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg">
-                <div>
-                  <label className="block text-xs text-[#9E9E98] mb-1">
-                    Opacity ({Math.round(watermarkOpacity * 100)}%)
-                  </label>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="1.0"
-                    step="0.05"
-                    value={watermarkOpacity}
-                    onChange={(e) => setWatermarkOpacity(parseFloat(e.target.value))}
-                    className="w-full accent-[#E8E8E3]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-[#9E9E98] mb-1">
-                    Angle ({watermarkRotation}°)
-                  </label>
-                  <input
-                    type="range"
-                    min="-90"
-                    max="90"
-                    step="15"
-                    value={watermarkRotation}
-                    onChange={(e) => setWatermarkRotation(parseInt(e.target.value))}
-                    className="w-full accent-[#E8E8E3]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-[#9E9E98] mb-1">Color</label>
-                  <div className="flex items-center space-x-2">
+                {/* 3. SPLIT OPTIONS */}
+                {currentTool.id === 'split' && (
+                  <div className="space-y-3">
+                    <label className="block text-xs font-semibold text-ink">
+                      Page Ranges Definition
+                    </label>
                     <input
-                      type="color"
-                      value={watermarkColor}
-                      onChange={(e) => setWatermarkColor(e.target.value)}
-                      className="w-7 h-7 rounded bg-transparent cursor-pointer"
+                      type="text"
+                      value={splitRange}
+                      onChange={(e) => setSplitRange(e.target.value)}
+                      placeholder="e.g. 1-3, 5, 8-12"
+                      className="w-full px-3 py-2 rounded border border-rule bg-paper text-xs text-ink font-mono placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-cyan"
                     />
-                    <span className="text-xs font-mono text-[#DCDCD6]">{watermarkColor}</span>
+                    <p className="text-[11px] text-ink-soft font-mono">
+                      Synced with visual cutter: click dividers on the left or type comma-separated ranges.
+                    </p>
                   </div>
-                </div>
-              </div>
-            </div>
-          )}
+                )}
 
-          {config.id === 'split' && (
-            <div className="p-5 rounded-2xl border border-white/10 bg-[#121214] max-w-md">
-              <label className="block text-xs font-semibold text-[#E8E8E3] mb-1.5">
-                Page Range
-              </label>
-              <input
-                type="text"
-                value={splitRange}
-                onChange={(e) => setSplitRange(e.target.value)}
-                placeholder="e.g. 1-3, 5, 8-12 (Leave blank for all pages)"
-                className="w-full px-3 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-white/30"
-              />
-              <p className="mt-1.5 text-[11px] text-[#666662]">
-                Leave empty to separate all pages into individual files in a ZIP archive.
-              </p>
-            </div>
-          )}
+                {/* 4. ROTATE OPTIONS */}
+                {currentTool.id === 'rotate' && (
+                  <div className="space-y-3">
+                    <label className="block text-xs font-semibold text-ink">
+                      Clockwise Angle
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[90, 180, 270].map((deg) => (
+                        <button
+                          key={deg}
+                          type="button"
+                          onClick={() => setRotateAngle(deg)}
+                          className={`py-2 px-2 text-xs font-mono rounded border transition-colors ${
+                            rotateAngle === deg
+                              ? 'bg-kraft border-rule-strong text-ink font-semibold'
+                              : 'bg-paper border-rule text-ink-soft hover:bg-kraft/50'
+                          }`}
+                        >
+                          {deg}°
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-          {config.id === 'to-images' && (
-            <div className="p-5 rounded-2xl border border-white/10 bg-[#121214] flex flex-wrap gap-6">
-              <div>
-                <label className="block text-xs font-semibold text-[#E8E8E3] mb-2">Format</label>
-                <div className="flex space-x-2">
-                  {['png', 'jpeg'].map((fmt) => (
-                    <button
-                      key={fmt}
-                      type="button"
-                      onClick={() => setImageFormat(fmt)}
-                      className={`px-3 py-1.5 rounded-xl text-xs uppercase border transition-all active:scale-[0.97] ${
-                        imageFormat === fmt
-                          ? 'bg-[#E8E8E3] border-white text-[#111113] font-semibold'
-                          : 'bg-white/5 border-white/10 text-[#9E9E98] hover:text-white'
-                      }`}
-                    >
-                      {fmt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#E8E8E3] mb-2">Resolution</label>
-                <div className="flex space-x-2">
-                  {[100, 150, 300].map((dpi) => (
-                    <button
-                      key={dpi}
-                      type="button"
-                      onClick={() => setImageDpi(dpi)}
-                      className={`px-3 py-1.5 rounded-xl text-xs border transition-all active:scale-[0.97] ${
-                        imageDpi === dpi
-                          ? 'bg-[#E8E8E3] border-white text-[#111113] font-semibold'
-                          : 'bg-white/5 border-white/10 text-[#9E9E98] hover:text-white'
-                      }`}
-                    >
-                      {dpi} DPI
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+                {/* 5. WATERMARK OPTIONS */}
+                {currentTool.id === 'watermark' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-ink mb-1">
+                        Stamp Text
+                      </label>
+                      <input
+                        type="text"
+                        value={watermarkText}
+                        onChange={(e) => setWatermarkText(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded border border-rule bg-paper text-xs text-ink font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-ink mb-1">
+                        Opacity: {Math.round(watermarkOpacity * 100)}%
+                      </label>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1.0"
+                        step="0.05"
+                        value={watermarkOpacity}
+                        onChange={(e) => setWatermarkOpacity(parseFloat(e.target.value))}
+                        className="w-full accent-red"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-ink mb-1">
+                        Angle: {watermarkRotation}°
+                      </label>
+                      <input
+                        type="range"
+                        min="-90"
+                        max="90"
+                        step="15"
+                        value={watermarkRotation}
+                        onChange={(e) => setWatermarkRotation(parseInt(e.target.value))}
+                        className="w-full accent-red"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-ink mb-1">
+                        Stamp Color
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={watermarkColor}
+                          onChange={(e) => setWatermarkColor(e.target.value)}
+                          className="w-7 h-7 rounded border border-rule cursor-pointer"
+                        />
+                        <span className="font-mono text-xs text-ink">{watermarkColor}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-          {config.id === 'canary' && (
-            <div className="p-5 rounded-2xl border border-white/10 bg-[#121214] space-y-4">
-              <div className="flex items-center space-x-2 pb-2 border-b border-white/5">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-semibold text-white">Forensic Recipient Tracking (Optional)</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-[11px] text-[#9E9E98] mb-1">Recipient Name</label>
-                  <input
-                    type="text"
-                    value={canaryRecipientName}
-                    onChange={(e) => setCanaryRecipientName(e.target.value)}
-                    placeholder="e.g. Jane Doe"
-                    className="w-full px-3 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white placeholder-[#666662] focus:outline-none focus:border-white/30"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-[#9E9E98] mb-1">Recipient Email</label>
-                  <input
-                    type="email"
-                    value={canaryRecipientEmail}
-                    onChange={(e) => setCanaryRecipientEmail(e.target.value)}
-                    placeholder="e.g. jane@partner.com"
-                    className="w-full px-3 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white placeholder-[#666662] focus:outline-none focus:border-white/30"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-[#9E9E98] mb-1">Organization / Department</label>
-                  <input
-                    type="text"
-                    value={canaryOrganization}
-                    onChange={(e) => setCanaryOrganization(e.target.value)}
-                    placeholder="e.g. External Legal Counsel"
-                    className="w-full px-3 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white placeholder-[#666662] focus:outline-none focus:border-white/30"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-[#9E9E98] mb-1">Tracking Note / Classification</label>
-                  <input
-                    type="text"
-                    value={canaryTrackingNote}
-                    onChange={(e) => setCanaryTrackingNote(e.target.value)}
-                    placeholder="e.g. Confidential M&A Board Deck"
-                    className="w-full px-3 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white placeholder-[#666662] focus:outline-none focus:border-white/30"
-                  />
-                </div>
-              </div>
-              <p className="text-[11px] text-[#9E9E98]">
-                An invisible multi-layer forensic token will be embedded into content streams and catalog structures. Recipient details are encrypted and only accessible to you.
-              </p>
-            </div>
-          )}
+                {/* 6. CONVERT OPTIONS */}
+                {currentTool.id === 'to-images' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-ink mb-1.5">
+                        Plate Format
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {['png', 'jpeg'].map((fmt) => (
+                          <button
+                            key={fmt}
+                            type="button"
+                            onClick={() => setImageFormat(fmt)}
+                            className={`py-1.5 text-xs font-mono uppercase rounded border ${
+                              imageFormat === fmt
+                                ? 'bg-kraft border-rule-strong text-ink font-semibold'
+                                : 'bg-paper border-rule text-ink-soft'
+                            }`}
+                          >
+                            {fmt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-ink mb-1.5">
+                        Plate Resolution
+                      </label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[100, 150, 300].map((dpi) => (
+                          <button
+                            key={dpi}
+                            type="button"
+                            onClick={() => setImageDpi(dpi)}
+                            className={`py-1 text-xs font-mono rounded border ${
+                              imageDpi === dpi
+                                ? 'bg-kraft border-rule-strong text-ink font-semibold'
+                                : 'bg-paper border-rule text-ink-soft'
+                            }`}
+                          >
+                            {dpi} DPI
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-          {/* Error Banner */}
-          {errorMessage && (
-            <div className="p-3.5 rounded-2xl border border-rose-900/60 bg-rose-950/20 text-xs text-rose-300 flex items-start space-x-2.5">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
-              <div>
-                <p className="font-semibold">Unable to process document</p>
-                <p className="mt-0.5 text-[#9E9E98]">{errorMessage}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Action Row */}
-          <div className="pt-2 flex items-center justify-between">
-            <span className="text-xs text-[#666662]">
-              {selectedFiles.length} {selectedFiles.length === 1 ? 'file selected' : 'files selected'}
-            </span>
-
-            <button
-              onClick={handleExecute}
-              disabled={isProcessing || selectedFiles.length === 0}
-              className="px-5 py-2.5 rounded-full bg-[#E8E8E3] hover:bg-white disabled:opacity-30 text-[#111113] font-semibold text-xs tracking-tight flex items-center transition-all duration-150 active:scale-[0.97] shadow-sm"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  {config.actionBtn} <ArrowRight className="w-3.5 h-3.5 ml-1.5 stroke-[2.2]" />
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      ) : config.id === 'verify-canary' ? (
-        /* Forensic Verification Result State */
-        <div className="mt-8 rounded-2xl border border-white/10 bg-[#121214] p-8 text-center space-y-6">
-          <div
-            className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center border ${
-              resultData.status === 'VERIFIED'
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                : resultData.status === 'REVOKED'
-                ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                : resultData.status === 'NOT_FOUND'
-                ? 'bg-zinc-500/10 border-zinc-500/20 text-zinc-400'
-                : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-            }`}
-          >
-            {resultData.status === 'VERIFIED' ? (
-              <ShieldCheck className="w-6 h-6 stroke-[2]" />
-            ) : resultData.status === 'REVOKED' ? (
-              <AlertCircle className="w-6 h-6 stroke-[2]" />
-            ) : resultData.status === 'NOT_FOUND' ? (
-              <Fingerprint className="w-6 h-6 stroke-[2]" />
-            ) : (
-              <AlertCircle className="w-6 h-6 stroke-[2]" />
-            )}
-          </div>
-
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-white">
-              {resultData.status === 'VERIFIED'
-                ? 'Authentic Canary Token Verified'
-                : resultData.status === 'REVOKED'
-                ? 'Canary Token Has Been Revoked'
-                : resultData.status === 'NOT_FOUND'
-                ? 'No Forensic Markers Detected'
-                : resultData.status === 'INVALID_OR_CORRUPTED'
-                ? 'Corrupted Canary Marker'
-                : 'Verification Inconclusive'}
-            </h2>
-            <p className="mt-1 text-xs text-[#9E9E98] max-w-md mx-auto">
-              {resultData.message}
-            </p>
-          </div>
-
-          <div className="max-w-md mx-auto p-4 rounded-xl border border-white/5 bg-[#161619] text-xs text-left space-y-2.5">
-            <div className="flex justify-between items-center">
-              <span className="text-[#9E9E98]">Registry Status</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                  resultData.status === 'VERIFIED'
-                    ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40'
-                    : resultData.status === 'REVOKED'
-                    ? 'bg-amber-950/40 text-amber-400 border-amber-800/40'
-                    : 'bg-white/5 text-[#E8E8E3] border-white/10'
-                }`}
-              >
-                {resultData.status}
-              </span>
-            </div>
-
-            {(resultData.token_id || resultData.token_masked) && (
-              <div className="flex justify-between items-center border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98]">Token Identifier</span>
-                <span className="font-mono text-[#E8E8E3] text-[11px] truncate max-w-[220px]">
-                  {resultData.token_id || resultData.token_masked}
-                </span>
-              </div>
-            )}
-
-            {resultData.organization && (
-              <div className="flex justify-between items-center border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98]">Organization</span>
-                <span className="text-white font-medium">{resultData.organization}</span>
-              </div>
-            )}
-
-            {resultData.recipient_name && (
-              <div className="flex justify-between items-center border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98]">Assigned Recipient</span>
-                <span className="text-white font-medium">
-                  {resultData.recipient_name}
-                  {resultData.recipient_email ? ` (${resultData.recipient_email})` : ''}
-                </span>
-              </div>
-            )}
-
-            {resultData.creator_email && (
-              <div className="flex justify-between items-center border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98]">Originating Issuer</span>
-                <span className="text-white font-mono text-[11px]">{resultData.creator_email}</span>
-              </div>
-            )}
-
-            {resultData.tracking_note && (
-              <div className="flex justify-between items-center border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98]">Tracking Note</span>
-                <span className="text-[#E8E8E3] italic">{resultData.tracking_note}</span>
-              </div>
-            )}
-
-            {resultData.markers_detected && resultData.markers_detected.length > 0 && (
-              <div className="border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98] block mb-1">Detected Markers</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {resultData.markers_detected.map((m) => (
-                    <span
-                      key={m}
-                      className="px-2 py-0.5 rounded-md bg-white/5 text-[10px] text-[#DCDCD6] font-mono border border-white/5"
-                    >
-                      {m}
+                {/* 7. CANARY WATERMARK FORENSICS */}
+                {currentTool.id === 'canary' && (
+                  <div className="space-y-3">
+                    <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-moss" />
+                      <span>Forensic Attribution</span>
                     </span>
-                  ))}
+                    <input
+                      type="text"
+                      value={canaryRecipientName}
+                      onChange={(e) => setCanaryRecipientName(e.target.value)}
+                      placeholder="Recipient full name"
+                      className="w-full px-2.5 py-1.5 rounded border border-rule bg-paper text-xs text-ink"
+                    />
+                    <input
+                      type="email"
+                      value={canaryRecipientEmail}
+                      onChange={(e) => setCanaryRecipientEmail(e.target.value)}
+                      placeholder="Recipient email address"
+                      className="w-full px-2.5 py-1.5 rounded border border-rule bg-paper text-xs text-ink"
+                    />
+                    <input
+                      type="text"
+                      value={canaryOrganization}
+                      onChange={(e) => setCanaryOrganization(e.target.value)}
+                      placeholder="Organization or team"
+                      className="w-full px-2.5 py-1.5 rounded border border-rule bg-paper text-xs text-ink"
+                    />
+                    <input
+                      type="text"
+                      value={canaryTrackingNote}
+                      onChange={(e) => setCanaryTrackingNote(e.target.value)}
+                      placeholder="Classification note (e.g. M&A Draft)"
+                      className="w-full px-2.5 py-1.5 rounded border border-rule bg-paper text-xs text-ink"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PHASE 3: RESULT (Stamp Motif, Before/After Odometer, Download, Continue With...) */}
+        {resultData && (
+          <div className="max-w-2xl mx-auto pt-6 space-y-6">
+            <div className="p-8 rounded-md border border-rule bg-vellum shadow-ink-lift text-center space-y-6 relative overflow-hidden">
+              {/* Rubber Stamp Thump Motif in top right */}
+              <div className="absolute top-4 right-6 pointer-events-none select-none">
+                <div className="animate-stamp border-2 border-moss px-3 py-1 rounded text-moss font-mono text-xs font-bold tracking-mono uppercase transform -rotate-6">
+                  {currentTool.id === 'verify-canary'
+                    ? resultData.status
+                    : currentTool.id === 'protect'
+                    ? 'SEALED'
+                    : 'DONE'}
                 </div>
               </div>
-            )}
 
-            {resultData.file_sha256 && (
-              <div className="border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98] block mb-0.5">Uploaded File SHA-256</span>
-                <span className="font-mono text-[10px] text-[#666662] break-all">
-                  {resultData.file_sha256}
+              {/* Status Header */}
+              <div className="space-y-2">
+                <div className="w-12 h-12 rounded border border-moss bg-moss/10 mx-auto flex items-center justify-center text-moss">
+                  <CheckCircle2 className="w-6 h-6" strokeWidth={1.75} />
+                </div>
+                <h2 className="font-display text-2xl text-ink">
+                  {currentTool.id === 'verify-canary'
+                    ? 'Canary Audit Complete'
+                    : 'Folio Ready for Collection'}
+                </h2>
+                <p className="text-xs text-ink-soft">
+                  {resultData.message || 'Operation executed cleanly on volatile bench.'}
+                </p>
+              </div>
+
+              {/* Before/After Size Comparison & Metadata */}
+              <div className="p-4 rounded border border-rule bg-paper/70 text-left space-y-3 font-mono text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-ink-soft">Output File:</span>
+                  <span className="text-ink font-semibold truncate max-w-[260px]">
+                    {resultData.output_filename || 'document.pdf'}
+                  </span>
+                </div>
+
+                {resultData.output_file_size_bytes !== undefined && (
+                  <div className="flex justify-between items-center border-t border-rule/60 pt-2">
+                    <span className="text-ink-soft">Final Size:</span>
+                    <span className="text-moss font-semibold tabular-nums">
+                      {formatBytes(resultData.output_file_size_bytes)}
+                    </span>
+                  </div>
+                )}
+
+                {resultData.stats?.compression_ratio_pct !== undefined && (
+                  <div className="border-t border-rule/60 pt-2 space-y-1.5">
+                    <div className="flex justify-between text-ink-soft">
+                      <span>Space Saved:</span>
+                      <span className="text-moss font-semibold tabular-nums">
+                        {resultData.stats.compression_ratio_pct}%
+                      </span>
+                    </div>
+                    {/* Fill bar */}
+                    <div className="w-full h-2 rounded bg-kraft overflow-hidden">
+                      <div
+                        className="h-full bg-moss transition-all duration-500 ease-out"
+                        style={{
+                          width: `${Math.min(100, resultData.stats.compression_ratio_pct)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Canary Verification Specifics */}
+                {resultData.token_id && (
+                  <div className="flex justify-between items-center border-t border-rule/60 pt-2">
+                    <span className="text-ink-soft">Canary Token:</span>
+                    <span className="text-ink font-mono text-[11px] truncate max-w-[220px]">
+                      {resultData.token_id}
+                    </span>
+                  </div>
+                )}
+
+                {resultData.recipient_name && (
+                  <div className="flex justify-between items-center border-t border-rule/60 pt-2">
+                    <span className="text-ink-soft">Recipient:</span>
+                    <span className="text-ink">{resultData.recipient_name}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons: Download + Vault + Start Over */}
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                {resultData.download_url && (
+                  <a
+                    href={resultData.download_url}
+                    download={resultData.output_filename || 'document.pdf'}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px"
+                  >
+                    <Download className="w-3.5 h-3.5" strokeWidth={2} />
+                    <span>Download Folio</span>
+                    <ArrowRight className="w-3.5 h-3.5 ml-1 transition-transform group-hover:translate-x-1" />
+                  </a>
+                )}
+
+                <button
+                  onClick={resetBench}
+                  className="px-4 py-2.5 rounded border border-rule bg-paper hover:bg-kraft text-ink text-xs font-mono transition-colors"
+                >
+                  Start Over
+                </button>
+
+                {isAuthenticated && (
+                  <Link
+                    to="/workspace"
+                    className="px-4 py-2.5 rounded border border-rule bg-paper hover:bg-kraft text-ink text-xs font-mono transition-colors flex items-center gap-1.5"
+                  >
+                    <FolderLock className="w-3.5 h-3.5 text-ink-soft" />
+                    <span>View in Vault</span>
+                  </Link>
+                )}
+              </div>
+
+              {/* "Continue with..." Chaining Chips */}
+              <div className="pt-4 border-t border-rule">
+                <span className="text-[11px] font-mono uppercase tracking-mono text-ink-faint block mb-2.5">
+                  Chain into next bench tool (zero re-upload)
                 </span>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {currentTool.id !== 'compress' && (
+                    <button
+                      onClick={() => continueWithTool('compress')}
+                      className="px-3 py-1 rounded border border-rule bg-paper hover:bg-kraft text-xs text-ink flex items-center gap-1.5 font-mono"
+                    >
+                      <Minimize2 className="w-3 h-3 text-ink-soft" />
+                      <span>Press (Compress)</span>
+                    </button>
+                  )}
+                  {currentTool.id !== 'protect' && (
+                    <button
+                      onClick={() => continueWithTool('protect')}
+                      className="px-3 py-1 rounded border border-rule bg-paper hover:bg-kraft text-xs text-ink flex items-center gap-1.5 font-mono"
+                    >
+                      <Lock className="w-3 h-3 text-ink-soft" />
+                      <span>Seal (Protect)</span>
+                    </button>
+                  )}
+                  {currentTool.id !== 'watermark' && (
+                    <button
+                      onClick={() => continueWithTool('watermark')}
+                      className="px-3 py-1 rounded border border-rule bg-paper hover:bg-kraft text-xs text-ink flex items-center gap-1.5 font-mono"
+                    >
+                      <Stamp className="w-3 h-3 text-ink-soft" />
+                      <span>Stamp (Watermark)</span>
+                    </button>
+                  )}
+                  <Link
+                    to="/workspace"
+                    className="px-3 py-1 rounded border border-rule bg-paper hover:bg-kraft text-xs text-ink flex items-center gap-1.5 font-mono"
+                  >
+                    <FolderLock className="w-3 h-3 text-ink-soft" />
+                    <span>Store in Vault</span>
+                  </Link>
+                </div>
               </div>
-            )}
-          </div>
-
-          <div className="flex items-center justify-center gap-3 pt-2">
-            <button
-              onClick={resetTool}
-              className="px-5 py-2.5 rounded-full bg-[#E8E8E3] hover:bg-white text-[#111113] font-semibold text-xs tracking-tight flex items-center transition-all duration-150 active:scale-[0.97] shadow-sm"
-            >
-              <RefreshCw className="w-3.5 h-3.5 mr-2" /> Verify Another Document
-            </button>
-          </div>
-        </div>
-      ) : config.id === 'canary' ? (
-        /* Canary Generation Result State */
-        <div className="mt-8 rounded-2xl border border-white/10 bg-[#121214] p-8 text-center space-y-6">
-          <div className="w-12 h-12 mx-auto rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-            <ShieldCheck className="w-6 h-6 stroke-[2]" />
-          </div>
-
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-white">Canary Watermark Embedded</h2>
-            <p className="mt-1 text-xs text-[#9E9E98]">
-              Your document has been forensically marked across content streams and catalog structures.
-            </p>
-          </div>
-
-          <div className="max-w-md mx-auto p-4 rounded-xl border border-white/5 bg-[#161619] text-xs text-left space-y-2.5">
-            <div className="flex justify-between items-center">
-              <span className="text-[#9E9E98]">Canary Token ID</span>
-              <span className="text-emerald-400 font-mono text-[11px] font-semibold">
-                {resultData.token_id}
-              </span>
-            </div>
-
-            {resultData.recipient_name && (
-              <div className="flex justify-between border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98]">Recipient</span>
-                <span className="text-white font-medium">{resultData.recipient_name}</span>
-              </div>
-            )}
-
-            {resultData.organization && (
-              <div className="flex justify-between border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98]">Organization</span>
-                <span className="text-white">{resultData.organization}</span>
-              </div>
-            )}
-
-            <div className="border-t border-white/5 pt-2">
-              <span className="text-[#9E9E98] block mb-0.5">Watermarked SHA-256</span>
-              <span className="font-mono text-[10px] text-[#666662] break-all">
-                {resultData.watermarked_sha256}
-              </span>
             </div>
           </div>
+        )}
+      </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <a
-              href={resultData.download_url}
-              download="canary_protected.pdf"
-              className="px-5 py-2.5 rounded-full bg-[#E8E8E3] hover:bg-white text-[#111113] font-semibold text-xs tracking-tight flex items-center transition-all duration-150 active:scale-[0.97] shadow-sm"
-            >
-              <Download className="w-3.5 h-3.5 mr-2 stroke-[2.2]" /> Download Protected PDF
-            </a>
-
-            <button
-              onClick={resetTool}
-              className="px-4 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-[#E8E8E3] font-medium text-xs border border-white/10 flex items-center transition-all duration-150 active:scale-[0.97]"
-            >
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Protect Another
-            </button>
-
-            {isAuthenticated && (
-              <Link
-                to="/workspace"
-                className="px-4 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-[#E8E8E3] font-medium text-xs border border-white/10 flex items-center transition-all duration-150 active:scale-[0.97]"
-              >
-                <FolderLock className="w-3.5 h-3.5 mr-1.5" /> View Tokens in Vault
-              </Link>
-            )}
-          </div>
-        </div>
-      ) : (
-        /* Standard Result State */
-        <div className="mt-8 rounded-2xl border border-white/10 bg-[#121214] p-8 text-center space-y-6">
-          <div className="w-12 h-12 mx-auto rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-            <CheckCircle2 className="w-6 h-6 stroke-[2]" />
-          </div>
-
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-white">Your document is ready</h2>
-            <p className="mt-1 text-xs text-[#9E9E98]">
-              Successfully processed and available for immediate download.
-            </p>
-          </div>
-
-          <div className="max-w-md mx-auto p-4 rounded-xl border border-white/5 bg-[#161619] text-xs text-left space-y-2">
-            <div className="flex justify-between">
-              <span className="text-[#9E9E98]">File Name</span>
-              <span className="text-white truncate max-w-[220px]" title={resultData.output_filename}>
-                {resultData.output_filename}
+      {/* STICKY BOTTOM ACTION BAR (During Phase 2 Configure) */}
+      {selectedFiles.length > 0 && !resultData && (
+        <div className="fixed bottom-0 inset-x-0 z-30 bg-vellum/95 backdrop-blur-md border-t border-rule py-3 px-4 sm:px-6 shadow-ink-lift">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold text-ink">
+                {selectedFiles.length} {selectedFiles.length === 1 ? 'folio' : 'folios'}
               </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[#9E9E98]">File Size</span>
-              <span className="text-emerald-400 font-mono">
-                {(resultData.output_file_size_bytes / 1024).toFixed(1)} KB
+              <span className="text-xs font-mono text-ink-soft tabular-nums">
+                [{formatBytes(totalBytes)}]
               </span>
-            </div>
-            {resultData.stats?.compression_ratio_pct !== undefined && (
-              <div className="flex justify-between border-t border-white/5 pt-2">
-                <span className="text-[#9E9E98]">Space Saved</span>
-                <span className="text-[#E8E8E3] font-mono">
-                  {resultData.stats.compression_ratio_pct}%
+              {isProcessing && (
+                <span className="hidden sm:inline-block text-xs font-mono text-red animate-pulse">
+                  {processingStage || 'Processing in isolated RAM namespace...'}
                 </span>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <a
-              href={resultData.download_url}
-              download={resultData.output_filename}
-              className="px-5 py-2.5 rounded-full bg-[#E8E8E3] hover:bg-white text-[#111113] font-semibold text-xs tracking-tight flex items-center transition-all duration-150 active:scale-[0.97] shadow-sm"
-            >
-              <Download className="w-3.5 h-3.5 mr-2 stroke-[2.2]" /> Download File
-            </a>
+            <div className="flex items-center gap-2">
+              {isProcessing && (
+                <button
+                  onClick={handleCancel}
+                  className="px-3 py-2 rounded border border-rule bg-paper text-ink-soft hover:text-ink text-xs font-mono transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
 
-            <button
-              onClick={resetTool}
-              className="px-4 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-[#E8E8E3] font-medium text-xs border border-white/10 flex items-center transition-all duration-150 active:scale-[0.97]"
-            >
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Process Another
-            </button>
-
-            {isAuthenticated && (
-              <Link
-                to="/workspace"
-                className="px-4 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-[#E8E8E3] font-medium text-xs border border-white/10 flex items-center transition-all duration-150 active:scale-[0.97]"
+              <button
+                onClick={handleExecute}
+                disabled={isProcessing}
+                className="px-6 py-2.5 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px flex items-center gap-2 disabled:opacity-50"
               >
-                <FolderLock className="w-3.5 h-3.5 mr-1.5" /> View in Vault
-              </Link>
-            )}
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Executing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{currentTool.actionBtn || `Execute ${currentTool.title}`}</span>
+                    <ArrowRight className="w-3.5 h-3.5 stroke-[2]" />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
-};
-
-export default ToolRunner;
+}
