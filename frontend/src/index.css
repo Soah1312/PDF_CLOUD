@@ -34,9 +34,19 @@
   --t-slow: 320ms;
   --t-stamp: 600ms;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Fluid typography */
+  --fluid-display: clamp(1.85rem, 5vw + 0.5rem, 3.25rem);
+  --fluid-subheading: clamp(1.15rem, 2.5vw + 0.5rem, 1.75rem);
 }
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    overflow-x: hidden;
+  }
+
   body {
     background-color: var(--paper);
     color: var(--ink);
@@ -44,6 +54,15 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    min-height: 100dvh;
+  }
+
+  /* Prevent iOS zoom on focus by ensuring input text is at least 16px on mobile */
+  @media (max-width: 767px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
   }
 
   /* Accessible focus ring: visible 2px cyan with 2px offset on EVERY interactive element */
@@ -82,6 +101,48 @@
   }
 }
 
+/* Safe Area Insets Utilities */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.bottom-safe {
+  bottom: env(safe-area-inset-bottom, 0px);
+}
+.top-safe {
+  top: env(safe-area-inset-top, 0px);
+}
+
+/* Fluid display heading */
+.font-display-fluid {
+  font-family: 'Gloock', 'Young Serif', Georgia, serif;
+  font-size: var(--fluid-display);
+  line-height: 1.05;
+}
+
+/* Touch action target sizing (min 44x44px for thumbs) */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Immediate active feedback on touch (100ms response, no sticky hover) */
+.touch-press {
+  transition: transform 80ms ease-out, opacity 80ms ease-out;
+}
+.touch-press:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
 /* Subtle Paper-Grain Texture Overlay (feTurbulence ~3% opacity, pointer-events none) */
 .paper-grain-overlay {
   position: fixed;
@@ -90,6 +151,13 @@
   z-index: 9999;
   opacity: 0.035;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Low-end & Reduced Data optimization: turn off texture overlay */
+@media (prefers-reduced-data: reduce), (max-width: 480px) and (pointer: coarse) {
+  .paper-grain-overlay {
+    display: none !important;
+  }
 }
 
 /* Soft Paper Shimmer Skeleton for Lazy Thumbnails */
@@ -155,6 +223,13 @@
   animation: stamp-thump var(--t-stamp) var(--ease-out) forwards;
 }
 
+@media (max-width: 767px) {
+  .animate-stamp {
+    /* 20% shorter duration on mobile per spec */
+    animation-duration: 480ms;
+  }
+}
+
 /* Marching Dashed Border Animation for Resting Dropzone */
 @keyframes marching-border {
   0% {
@@ -187,6 +262,35 @@
   animation: compress-squash var(--t-slow) var(--ease-out);
 }
 
+/* Bottom Sheet Animation */
+@keyframes sheet-spring-up {
+  0% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-sheet-up {
+  animation: sheet-spring-up 260ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Tab Bar Underline Animation */
+.tab-indicator {
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Native horizontal scroll snap container */
+.scroll-snap-x {
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-snap-item {
+  scroll-snap-align: start;
+}
+
 /* View Transitions API (Feature-detected Native Page Morphing) */
 @view-transition {
   navigation: auto;
@@ -210,7 +314,7 @@
   to { opacity: 1; }
 }
 
-/* Reduced Motion Respect: disable all physical motion, tilt, odometer, and marching borders */
+/* Reduced Motion Respect: disable physical motion, tilt, odometer, and marching borders */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
     animation-duration: 0.01ms !important;
@@ -235,6 +339,11 @@
 
   .animate-compress-squash {
     animation: none !important;
+  }
+
+  .animate-sheet-up {
+    animation: none !important;
+    transform: translateY(0) !important;
   }
 
   ::view-transition-old(root),
