@@ -51,25 +51,54 @@ def test_alembic_upgrade_and_downgrade(test_db_path):
     assert "completed_at" in columns
     assert "expires_at" in columns
 
-    # 2. Reversible downgrade to 0001_initial_stage1
-    command.downgrade(cfg, "0001_initial_stage1")
+    # Verify Stage 3 columns in canary_tokens
+    canary_cols = {col["name"]: col for col in inspector.get_columns("canary_tokens")}
+    assert "recipient_name" in canary_cols
+    assert "recipient_email" in canary_cols
+    assert "organization" in canary_cols
+    assert "tracking_note" in canary_cols
+    assert "original_sha256" in canary_cols
+    assert "watermarked_sha256" in canary_cols
+    assert "status" in canary_cols
+    assert "steganography_method" in canary_cols
+    assert "revoked_at" in canary_cols
+
+    # Verify Stage 3 columns in saved_workflows
+    workflow_cols = {col["name"]: col for col in inspector.get_columns("saved_workflows")}
+    assert "updated_at" in workflow_cols
+
+    # 2. Reversible downgrade to 0002_add_stage2_cols (verifying 0003 rollback)
+    command.downgrade(cfg, "0002_add_stage2_cols")
     engine.dispose()
 
+    engine = create_engine(f"sqlite:///{test_db_path}")
+    inspector = inspect(engine)
+    canary_cols_after_0002 = {col["name"]: col for col in inspector.get_columns("canary_tokens")}
+    assert "recipient_name" not in canary_cols_after_0002
+    assert "status" not in canary_cols_after_0002
+    workflow_cols_after_0002 = {col["name"]: col for col in inspector.get_columns("saved_workflows")}
+    assert "updated_at" not in workflow_cols_after_0002
+    stage2_cols = {col["name"]: col for col in inspector.get_columns("pdf_jobs")}
+    assert "output_file_size_bytes" in stage2_cols
+    engine.dispose()
+
+    # 3. Reversible downgrade to 0001_initial_stage1
+    command.downgrade(cfg, "0001_initial_stage1")
     engine = create_engine(f"sqlite:///{test_db_path}")
     inspector = inspect(engine)
     columns_after_downgrade = {col["name"]: col for col in inspector.get_columns("pdf_jobs")}
     assert "output_file_size_bytes" not in columns_after_downgrade
     assert "expires_at" not in columns_after_downgrade
-
-    # 3. Complete downgrade to base
-    command.downgrade(cfg, "base")
     engine.dispose()
 
+    # 4. Complete downgrade to base
+    command.downgrade(cfg, "base")
     engine = create_engine(f"sqlite:///{test_db_path}")
     inspector = inspect(engine)
     remaining_tables = inspector.get_table_names()
     assert "users" not in remaining_tables
     assert "pdf_jobs" not in remaining_tables
+    engine.dispose()
 
 
 def test_migration_idempotency_on_existing_tables(test_db_path):

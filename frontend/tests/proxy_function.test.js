@@ -32,10 +32,10 @@ test('1. API Proxy Routing: preserves pathname and query parameters', async () =
   assert.equal(response.status, 200);
   assert.equal(
     capturedUrl,
-    'http://13.126.230.166/api/v1/files?page=2&status=COMPLETED'
+    'http://ec2-13-126-230-166.ap-south-1.compute.amazonaws.com/api/v1/files?page=2&status=COMPLETED'
   );
   assert.equal(capturedOptions.method, 'GET');
-  assert.equal(capturedOptions.headers.get('Host'), '13.126.230.166');
+  assert.equal(capturedOptions.headers.get('Host'), 'ec2-13-126-230-166.ap-south-1.compute.amazonaws.com');
   assert.equal(capturedOptions.headers.get('X-Forwarded-Host'), 'cloudpdf.pages.dev');
 });
 

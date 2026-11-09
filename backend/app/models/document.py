@@ -75,6 +75,15 @@ class CanaryToken(Base):
         nullable=False,
         index=True
     )
+    recipient_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    recipient_email: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    organization: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    tracking_note: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    original_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    watermarked_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    steganography_method: Mapped[str] = mapped_column(String(32), default="DUAL_LAYER", nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="ACTIVE", nullable=False, index=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     download_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -83,5 +92,5 @@ class CanaryToken(Base):
     job = relationship("PDFJob", back_populates="canary_tokens")
 
     def __repr__(self) -> str:
-        return f"<CanaryToken token_id={self.token_id} user_id={self.user_id}>"
+        return f"<CanaryToken token_id={self.token_id} user_id={self.user_id} status={self.status}>"
 

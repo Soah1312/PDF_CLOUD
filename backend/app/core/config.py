@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # Security / JWT
     JWT_ALGORITHM: str = "RS256"
 
+    # Forensic Canary Cryptographic Secret (persistent across restarts, must be 32+ chars in prod)
+    CANARY_HMAC_SECRET: Optional[str] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -174,9 +177,39 @@ def load_ssm_parameters(settings: Settings) -> Settings:
 def get_settings() -> Settings:
     """
     Singleton getter for application settings.
+    Validates security constraints across environments.
     """
     initial_settings = Settings()
-    return load_ssm_parameters(initial_settings)
+    loaded_settings = load_ssm_parameters(initial_settings)
+
+    # Validate critical production settings
+    is_prod = str(loaded_settings.ENVIRONMENT).lower() in ("production", "prod")
+    if is_prod:
+        secret = loaded_settings.CANARY_HMAC_SECRET
+        if not secret or len(secret.strip()) < 32:
+            raise RuntimeError(
+                "CRITICAL SECURITY CONFIGURATION ERROR: CANARY_HMAC_SECRET is missing or insecure. "
+                "In production, a cryptographically random secret of at least 32 characters must be configured "
+                "in backend/.env or environment variables."
+            )
+        insecure_placeholders = {
+            "insecure", "changeme", "secret", "password",
+            "cloudpdf_forensic_canary_hmac_secret_2026_ap_south_1"
+        }
+        if secret.strip().lower() in insecure_placeholders:
+            raise RuntimeError(
+                "CRITICAL SECURITY CONFIGURATION ERROR: CANARY_HMAC_SECRET cannot use an insecure or placeholder default."
+            )
+    else:
+        # Development / Testing fallback
+        if not loaded_settings.CANARY_HMAC_SECRET:
+            logger.warning(
+                "[Config] CANARY_HMAC_SECRET is not set. Using local development fallback secret. "
+                "Production startup will fail safely if an explicit 32+ char secret is not provided."
+            )
+            loaded_settings.CANARY_HMAC_SECRET = "dev_local_canary_hmac_secret_for_testing_only_32chars"
+
+    return loaded_settings
 
 
 # Exported singleton instance

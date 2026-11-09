@@ -6,27 +6,28 @@ import {
   fetchSessionContext,
   fetchFiles,
   uploadFile,
-  deleteFile
+  deleteFile,
+  fetchCanaryTokens,
+  revokeCanaryToken
 } from '../services/api';
 import {
   FolderLock,
-  Cloud,
-  Database,
-  Fingerprint,
   HardDrive,
   UploadCloud,
   FileText,
-  ShieldCheck,
   Plus,
   RefreshCw,
-  ExternalLink,
   Lock,
   Download,
   Trash2,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Layers
+  Layers,
+  ShieldCheck,
+  ShieldAlert,
+  Ban,
+  Fingerprint
 } from 'lucide-react';
 
 export const Workspace = () => {
@@ -34,6 +35,8 @@ export const Workspace = () => {
   const [profile, setProfile] = useState(null);
   const [sessionCtx, setSessionCtx] = useState(null);
   const [files, setFiles] = useState([]);
+  const [canaryTokens, setCanaryTokens] = useState([]);
+  const [activeTab, setActiveTab] = useState('vault'); // 'vault' | 'canary'
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState('');
@@ -44,17 +47,19 @@ export const Workspace = () => {
     setLoading(true);
     setErrorMessage('');
     try {
-      const [userData, contextData, fileData] = await Promise.all([
+      const [userData, contextData, fileData, tokenData] = await Promise.all([
         fetchCurrentUser(),
         fetchSessionContext(),
         fetchFiles().catch(() => ({ files: [], storage_used_bytes: 0 })),
+        fetchCanaryTokens().catch(() => []),
       ]);
       setProfile(userData);
       setSessionCtx(contextData);
       setFiles(fileData.files || []);
+      setCanaryTokens(tokenData || []);
     } catch (err) {
       console.error('Failed to load workspace data:', err);
-      setErrorMessage('Could not synchronize workspace with cloud server.');
+      setErrorMessage('Could not synchronize your workspace. Please refresh.');
     } finally {
       setLoading(false);
     }
@@ -73,7 +78,7 @@ export const Workspace = () => {
     setErrorMessage('');
     try {
       await uploadFile(selected);
-      setMessage(`Successfully uploaded '${selected.name}' to Amazon S3 Vault.`);
+      setMessage(`Successfully uploaded '${selected.name}'.`);
       await loadData();
     } catch (err) {
       setErrorMessage(err.response?.data?.detail || 'Failed to upload document.');
@@ -84,15 +89,32 @@ export const Workspace = () => {
   };
 
   const handleDelete = async (fileId, fileName) => {
-    if (!window.confirm(`Are you sure you want to delete '${fileName}' from your cloud vault?`)) {
+    if (!window.confirm(`Are you sure you want to remove '${fileName}' from your vault?`)) {
       return;
     }
     try {
       await deleteFile(fileId);
-      setMessage(`Deleted '${fileName}' and reclaimed storage.`);
+      setMessage(`Removed '${fileName}' and freed storage.`);
       await loadData();
     } catch (err) {
       setErrorMessage(err.response?.data?.detail || 'Failed to delete file.');
+    }
+  };
+
+  const handleRevokeCanary = async (tokenId) => {
+    if (
+      !window.confirm(
+        `Revoke forensic canary token '${tokenId}'? Future verifications of this document will reflect that it was revoked.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await revokeCanaryToken(tokenId);
+      setMessage(`Successfully revoked canary token '${tokenId}'.`);
+      await loadData();
+    } catch (err) {
+      setErrorMessage(err.response?.data?.detail || 'Failed to revoke canary token.');
     }
   };
 
@@ -101,24 +123,20 @@ export const Workspace = () => {
   const storagePercentage = Math.min(100, Math.round((storageUsed / MAX_STORAGE_BYTES) * 100));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       {/* Workspace Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-8 border-b border-slate-800 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-white/5 gap-4">
         <div>
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold mb-2">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Authenticated Member Vault</span>
-          </div>
-          <h1 className="text-3xl font-bold text-white flex items-center">
-            <FolderLock className="w-8 h-8 mr-3 text-indigo-400" />
-            My Cloud Workspace
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center">
+            <FolderLock className="w-5 h-5 mr-2.5 text-[#E8E8E3] stroke-[1.75]" />
+            Cloud Document Vault
           </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Encrypted Amazon S3 document vault, persistent PostgreSQL metadata, and automated history.
+          <p className="mt-1 text-xs text-[#9E9E98]">
+            Manage, download, and organize your encrypted documents.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2.5">
           <input
             type="file"
             ref={fileInputRef}
@@ -129,25 +147,25 @@ export const Workspace = () => {
           <button
             onClick={loadData}
             disabled={loading}
-            className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-2 rounded-full border border-white/10 bg-[#121214] text-[#9E9E98] hover:text-white transition-all active:scale-[0.95]"
             title="Refresh vault"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="flex items-center text-xs font-semibold px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50"
+            className="flex items-center text-xs font-semibold px-4 py-2 rounded-full bg-[#E8E8E3] text-[#111113] hover:bg-white transition-all duration-150 active:scale-[0.97] disabled:opacity-50 shadow-sm"
           >
             {isUploading ? (
               <>
-                <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                Uploading to S3...
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                Uploading...
               </>
             ) : (
               <>
-                <UploadCloud className="w-4 h-4 mr-1.5" />
-                Upload Document to S3
+                <UploadCloud className="w-3.5 h-3.5 mr-1.5" />
+                Upload Document
               </>
             )}
           </button>
@@ -156,194 +174,320 @@ export const Workspace = () => {
 
       {/* Notifications */}
       {message && (
-        <div className="mt-6 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 flex items-center justify-between">
+        <div className="mt-5 p-3 rounded-2xl border border-emerald-900/60 bg-emerald-950/20 text-xs text-emerald-300 flex items-center justify-between">
           <span className="flex items-center">
-            <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" />
             {message}
           </span>
           <button onClick={() => setMessage('')} className="text-emerald-400 hover:text-white ml-2">&times;</button>
         </div>
       )}
       {errorMessage && (
-        <div className="mt-6 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between">
+        <div className="mt-5 p-3 rounded-2xl border border-rose-900/60 bg-rose-950/20 text-xs text-rose-300 flex items-center justify-between">
           <span className="flex items-center">
-            <AlertCircle className="w-4 h-4 mr-2 text-rose-400 shrink-0" />
+            <AlertCircle className="w-3.5 h-3.5 mr-2 text-rose-400 shrink-0" />
             {errorMessage}
           </span>
           <button onClick={() => setErrorMessage('')} className="text-rose-400 hover:text-white ml-2">&times;</button>
         </div>
       )}
 
-      {/* Metrics & Storage Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-8">
-        {/* Cognito Identity Card */}
-        <div className="p-6 rounded-2xl glass-panel border border-slate-800/80 bg-slate-900/50">
-          <div className="flex items-center justify-between text-slate-400 mb-3 text-xs">
-            <span className="font-mono uppercase">Cognito Member</span>
-            <Lock className="w-4 h-4 text-purple-400" />
+      {/* Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
+        {/* Account Status */}
+        <div className="p-4 rounded-2xl border border-white/10 bg-[#121214]">
+          <div className="flex items-center justify-between text-[#666662] mb-1.5 text-xs">
+            <span>Account</span>
+            <Lock className="w-3.5 h-3.5 text-[#9E9E98]" />
           </div>
           <div className="text-sm font-semibold text-white truncate" title={user?.email}>
             {user?.email}
           </div>
-          <div className="mt-2 text-[11px] font-mono text-slate-500 truncate" title={profile?.cognito_sub || user?.sub}>
-            Sub: {profile?.cognito_sub || user?.sub}
-          </div>
-          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-            <span>RDS User ID</span>
-            <span className="font-mono text-indigo-400 text-[11px]">
-              {profile?.id ? `${profile.id.slice(0, 8)}...` : 'Synchronized'}
-            </span>
+          <div className="mt-2 text-[11px] text-[#9E9E98] flex items-center">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5"></span>
+            Authenticated Member
           </div>
         </div>
 
-        {/* S3 Storage Quota */}
-        <div className="p-6 rounded-2xl glass-panel border border-slate-800/80 bg-slate-900/50">
-          <div className="flex items-center justify-between text-slate-400 mb-3 text-xs">
-            <span className="font-mono uppercase">S3 Vault Storage</span>
-            <HardDrive className="w-4 h-4 text-sky-400" />
+        {/* Storage Quota */}
+        <div className="p-4 rounded-2xl border border-white/10 bg-[#121214]">
+          <div className="flex items-center justify-between text-[#666662] mb-1.5 text-xs">
+            <span>Cloud Storage</span>
+            <HardDrive className="w-3.5 h-3.5 text-[#9E9E98]" />
           </div>
-          <div className="text-xl font-bold text-white">
-            {(storageUsed / (1024 * 1024)).toFixed(2)} <span className="text-xs font-normal text-slate-400">/ 500 MB</span>
+          <div className="text-sm font-semibold text-white">
+            {(storageUsed / (1024 * 1024)).toFixed(1)} MB <span className="text-xs font-normal text-[#666662]">/ 500 MB</span>
           </div>
-          <div className="mt-3 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+          <div className="mt-2.5 w-full bg-white/5 border border-white/5 h-1.5 rounded-full overflow-hidden">
             <div
-              className="bg-indigo-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.max(5, storagePercentage)}%` }}
+              className="bg-[#E8E8E3] h-full rounded-full transition-all duration-300"
+              style={{ width: `${Math.max(2, storagePercentage)}%` }}
             />
           </div>
-          <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between">
-            <span>Quota utilization</span>
-            <span className="font-mono text-slate-300">{storagePercentage}%</span>
+          <div className="mt-1.5 text-[10px] text-[#666662] flex items-center justify-between">
+            <span>Utilization</span>
+            <span>{storagePercentage}%</span>
           </div>
         </div>
 
-        {/* Forensic Canary Token Monitor */}
-        <div className="p-6 rounded-2xl glass-panel border border-slate-800/80 bg-slate-900/50">
-          <div className="flex items-center justify-between text-slate-400 mb-3 text-xs">
-            <span className="font-mono uppercase">Stored Cloud Documents</span>
-            <FileText className="w-4 h-4 text-emerald-400" />
+        {/* Files Count */}
+        <div className="p-4 rounded-2xl border border-white/10 bg-[#121214]">
+          <div className="flex items-center justify-between text-[#666662] mb-1.5 text-xs">
+            <span>Saved Documents</span>
+            <FileText className="w-3.5 h-3.5 text-[#9E9E98]" />
           </div>
-          <div className="text-xl font-bold text-white flex items-center">
-            {files.length} <span className="text-xs font-normal text-slate-400 ml-2">Active Files</span>
+          <div className="text-sm font-semibold text-white">
+            {files.length} {files.length === 1 ? 'file' : 'files'}
           </div>
-          <p className="mt-2 text-xs text-slate-400">
-            Persistent cloud documents stored under your Amazon S3 prefix.
-          </p>
-          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Target Bucket</span>
-            <span className="text-emerald-400 font-mono text-[11px]">cloudpdf-studio-storage-2026</span>
+          <div className="mt-2 text-[11px] text-[#9E9E98]">
+            Protected with standard AES encryption
           </div>
         </div>
       </div>
 
-      {/* S3 Document Vault Table */}
-      <div className="rounded-2xl glass-panel border border-slate-800/80 bg-slate-900/40 overflow-hidden mt-8">
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <FileText className="w-4 h-4 text-indigo-400" />
-            <h2 className="text-base font-semibold text-white">S3 Document Vault</h2>
-          </div>
-          <span className="text-xs text-slate-500 font-mono">{files.length} items</span>
-        </div>
+      {/* Section Tabs */}
+      <div className="flex items-center space-x-2 pb-4">
+        <button
+          onClick={() => setActiveTab('vault')}
+          className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-[0.97] ${
+            activeTab === 'vault'
+              ? 'bg-[#E8E8E3] text-[#111113]'
+              : 'bg-[#121214] text-[#9E9E98] hover:text-white border border-white/5'
+          }`}
+        >
+          <FolderLock className="w-3.5 h-3.5" />
+          <span>Saved Documents ({files.length})</span>
+        </button>
 
-        {files.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-400">
-              <UploadCloud className="w-8 h-8 text-indigo-400" />
+        <button
+          onClick={() => setActiveTab('canary')}
+          className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-[0.97] ${
+            activeTab === 'canary'
+              ? 'bg-[#E8E8E3] text-[#111113]'
+              : 'bg-[#121214] text-[#9E9E98] hover:text-white border border-white/5'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Canary Tokens ({canaryTokens.length})</span>
+        </button>
+      </div>
+
+      {activeTab === 'vault' ? (
+        /* Document Ledger Table */
+        <div className="rounded-2xl border border-white/10 bg-[#121214] overflow-hidden">
+          <div className="p-4 border-b border-white/5 flex items-center justify-between bg-[#151518]">
+            <div className="flex items-center space-x-2">
+              <FileText className="w-4 h-4 text-[#E8E8E3]" />
+              <h2 className="text-xs font-semibold text-white">Your Files</h2>
             </div>
-            <h3 className="text-base font-semibold text-white">Your Cloud Vault is Empty</h3>
-            <p className="mt-1.5 text-xs text-slate-400 max-w-sm mx-auto">
-              Uploaded PDFs and processed documents persist here securely in Amazon S3 linked to your RDS user profile.
-            </p>
-            <div className="mt-5 flex items-center justify-center gap-3">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-md transition-all"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Upload First Document
-              </button>
+            <span className="text-[11px] text-[#666662]">{files.length} total</span>
+          </div>
+
+          {files.length === 0 ? (
+            <div className="p-10 text-center">
+              <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#9E9E98]">
+                <UploadCloud className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">No documents saved yet</h3>
+              <p className="mt-1 text-xs text-[#9E9E98] max-w-sm mx-auto">
+                Documents you process or upload while signed in will appear here for safe storage.
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-2.5">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-[#E8E8E3] text-[#111113] hover:bg-white font-medium text-xs transition-all active:scale-[0.97]"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  Upload Document
+                </button>
+                <Link
+                  to="/tools/merge"
+                  className="inline-flex items-center px-3.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-[#E8E8E3] font-medium text-xs transition-all active:scale-[0.97]"
+                >
+                  <Layers className="w-3.5 h-3.5 mr-1" />
+                  Merge Files
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-white/5 text-[#666662] bg-[#121214] text-[11px]">
+                    <th className="py-2.5 px-4 font-medium">Document</th>
+                    <th className="py-2.5 px-4 font-medium">Action</th>
+                    <th className="py-2.5 px-4 font-medium">Size</th>
+                    <th className="py-2.5 px-4 font-medium">Date</th>
+                    <th className="py-2.5 px-4 text-right font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {files.map((file) => (
+                    <tr key={file.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center space-x-2.5">
+                          <FileText className="w-3.5 h-3.5 text-[#9E9E98] shrink-0" />
+                          <span className="font-medium text-[#E8E8E3] max-w-[240px] truncate" title={file.original_filename}>
+                            {file.original_filename}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-[#9E9E98]">
+                        <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/5 text-[10px] capitalize">
+                          {file.action_type}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-[#9E9E98] font-mono text-[11px]">
+                        {((file.output_file_size_bytes || file.file_size_bytes) / 1024).toFixed(1)} KB
+                      </td>
+                      <td className="py-3 px-4 text-[#666662] text-[11px]">
+                        {new Date(file.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-1.5">
+                        {file.download_url && (
+                          <a
+                            href={file.download_url}
+                            download={file.original_filename}
+                            className="inline-flex items-center p-1.5 rounded-full border border-white/10 bg-white/5 text-[#E8E8E3] hover:text-white hover:bg-white/10 transition-colors active:scale-[0.95]"
+                            title="Download Document"
+                          >
+                            <Download className="w-3 h-3" />
+                          </a>
+                        )}
+                        <button
+                          onClick={() => handleDelete(file.id, file.original_filename)}
+                          className="inline-flex items-center p-1.5 rounded-full border border-rose-950/40 bg-rose-950/20 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors active:scale-[0.95]"
+                          title="Delete Document"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Forensic Canary Tokens Table */
+        <div className="rounded-2xl border border-white/10 bg-[#121214] overflow-hidden">
+          <div className="p-4 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between bg-[#151518] gap-3">
+            <div className="flex items-center space-x-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <div>
+                <h2 className="text-xs font-semibold text-white">Active & Revoked Canary Tokens</h2>
+                <p className="text-[10px] text-[#9E9E98]">Multi-layer forensic markers embedded in distributed documents</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
               <Link
-                to="/tools/merge"
-                className="inline-flex items-center px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs border border-slate-700 transition-all"
+                to="/tools/canary"
+                className="px-3 py-1 rounded-full bg-[#E8E8E3] text-[#111113] hover:bg-white text-xs font-semibold flex items-center active:scale-[0.97]"
               >
-                <Layers className="w-3.5 h-3.5 mr-1.5" />
-                Launch PDF Merge
+                <Plus className="w-3 h-3 mr-1" /> Embed Token
+              </Link>
+              <Link
+                to="/tools/verify-canary"
+                className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-[#E8E8E3] hover:bg-white/10 text-xs font-medium flex items-center active:scale-[0.97]"
+              >
+                <Fingerprint className="w-3 h-3 mr-1" /> Verify Leak
               </Link>
             </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 bg-slate-950/60 font-mono text-[11px] uppercase">
-                  <th className="py-3 px-4">Document</th>
-                  <th className="py-3 px-4">Operation</th>
-                  <th className="py-3 px-4">Size</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Created</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {files.map((file) => (
-                  <tr key={file.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center space-x-2.5">
-                        <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span className="font-medium text-slate-200 max-w-[220px] truncate" title={file.original_filename}>
-                          {file.original_filename}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-400">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-indigo-300 text-[10px]">
-                        {file.action_type}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-300">
-                      {((file.output_file_size_bytes || file.file_size_bytes) / 1024).toFixed(1)} KB
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        file.status === 'COMPLETED'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : file.status === 'FAILED'
-                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {file.status}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]">
-                      {new Date(file.created_at).toLocaleDateString()} {new Date(file.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="py-3.5 px-4 text-right space-x-2">
-                      {file.download_url && (
-                        <a
-                          href={file.download_url}
-                          download={file.original_filename}
-                          className="inline-flex items-center p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 transition-colors"
-                          title="Download Document"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                      <button
-                        onClick={() => handleDelete(file.id, file.original_filename)}
-                        className="inline-flex items-center p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors"
-                        title="Delete Document"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
+
+          {canaryTokens.length === 0 ? (
+            <div className="p-10 text-center">
+              <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#9E9E98]">
+                <ShieldCheck className="w-5 h-5 text-emerald-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-white">No canary tokens generated yet</h3>
+              <p className="mt-1 text-xs text-[#9E9E98] max-w-sm mx-auto">
+                Embed invisible forensic markers in confidential documents before sharing them to trace potential leaks.
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-2.5">
+                <Link
+                  to="/tools/canary"
+                  className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-[#E8E8E3] text-[#111113] hover:bg-white font-medium text-xs transition-all active:scale-[0.97]"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  Generate Canary Watermark
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-white/5 text-[#666662] bg-[#121214] text-[11px]">
+                    <th className="py-2.5 px-4 font-medium">Token ID</th>
+                    <th className="py-2.5 px-4 font-medium">Recipient / Org</th>
+                    <th className="py-2.5 px-4 font-medium">Tracking Note</th>
+                    <th className="py-2.5 px-4 font-medium">Status</th>
+                    <th className="py-2.5 px-4 font-medium">Created</th>
+                    <th className="py-2.5 px-4 text-right font-medium">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {canaryTokens.map((t) => (
+                    <tr key={t.token_id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="py-3 px-4">
+                        <span className="font-mono text-xs text-[#E8E8E3]">{t.token_id}</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="text-white font-medium">
+                          {t.recipient_name || 'Unassigned'}
+                        </div>
+                        {t.organization && (
+                          <div className="text-[10px] text-[#9E9E98]">{t.organization}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-[#9E9E98] text-[11px]">
+                        {t.tracking_note || '—'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            t.status === 'ACTIVE'
+                              ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40'
+                              : 'bg-amber-950/40 text-amber-400 border-amber-800/40'
+                          }`}
+                        >
+                          {t.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-[#666662] text-[11px]">
+                        {new Date(t.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-1.5">
+                        {t.download_url && (
+                          <a
+                            href={t.download_url}
+                            download={`protected_${t.token_id}.pdf`}
+                            className="inline-flex items-center p-1.5 rounded-full border border-white/10 bg-white/5 text-[#E8E8E3] hover:text-white hover:bg-white/10 transition-colors active:scale-[0.95]"
+                            title="Download Protected Document"
+                          >
+                            <Download className="w-3 h-3" />
+                          </a>
+                        )}
+                        {t.status === 'ACTIVE' && (
+                          <button
+                            onClick={() => handleRevokeCanary(t.token_id)}
+                            className="inline-flex items-center p-1.5 rounded-full border border-amber-950/40 bg-amber-950/20 text-amber-400 hover:text-amber-300 hover:bg-amber-950/40 transition-colors active:scale-[0.95]"
+                            title="Revoke Token"
+                          >
+                            <Ban className="w-3 h-3" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

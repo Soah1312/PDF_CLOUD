@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Lock, Mail, Eye, EyeOff, Loader2, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
 
 export const Login = () => {
-  const { login, authConfig } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -36,11 +36,11 @@ export const Login = () => {
       const code = err.code || '';
       if (code === 'UserNotConfirmedException') {
         setUnconfirmedUser(true);
-        setErrorMessage('Your account is not verified yet. Please enter the verification code sent to your email.');
+        setErrorMessage('Account pending verification. Enter the code sent to your email.');
       } else if (code === 'NotAuthorizedException') {
-        setErrorMessage('Incorrect email or password. Please verify your credentials.');
+        setErrorMessage('Incorrect email or password. Please try again.');
       } else if (code === 'UserNotFoundException') {
-        setErrorMessage('No account found with this email. Please register first.');
+        setErrorMessage('No account found with this email. Please sign up first.');
       } else {
         setErrorMessage(err.message || 'Authentication failed. Please check your credentials.');
       }
@@ -50,97 +50,70 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 p-8 rounded-2xl glass-panel border border-slate-800 shadow-2xl bg-slate-900/90">
-        {/* Header */}
-        <div className="text-center">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mb-4 shadow-inner">
-            <Lock className="w-6 h-6" />
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">
-            Sign in to CloudPDF Studio
-          </h2>
-          <p className="mt-2 text-xs text-slate-400">
-            Access your secure document vault, canary watermarking, and saved workflows.
+    <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
+      <div className="max-w-sm w-full p-6 sm:p-8 rounded-2xl border border-white/10 bg-[#121214] space-y-6 shadow-2xl">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-white">
+            Sign In to CloudPDF
+          </h1>
+          <p className="mt-1 text-xs text-[#9E9E98]">
+            Access your encrypted document vault and canary tracking.
           </p>
         </div>
 
-        {/* Cognito Config Warning banner if not configured */}
-        {!authConfig.isConfigured && (
-          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-start space-x-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">Amazon Cognito Pending Setup</p>
-              <p className="text-[11px] text-amber-400/80 mt-0.5">
-                Backend reports unconfigured Cognito credentials. Please configure <code className="bg-amber-950 px-1 py-0.5 rounded">COGNITO_USER_POOL_ID</code> & <code className="bg-amber-950 px-1 py-0.5 rounded">COGNITO_CLIENT_ID</code> in <code className="bg-amber-950 px-1 py-0.5 rounded">backend/.env</code>.
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Error Alert */}
         {errorMessage && (
-          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex flex-col space-y-2">
+          <div className="p-3 rounded-xl border border-rose-900/60 bg-rose-950/20 text-xs text-rose-300 flex flex-col space-y-1.5">
             <div className="flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
               <span>{errorMessage}</span>
             </div>
             {unconfirmedUser && (
               <Link
                 to={`/confirm?email=${encodeURIComponent(email)}`}
-                className="text-xs font-semibold text-rose-200 underline hover:text-white"
+                className="text-[11px] text-[#E8E8E3] underline hover:text-white"
               >
-                Click here to enter your verification code &rarr;
+                Enter your confirmation code &rarr;
               </Link>
             )}
           </div>
         )}
 
         {/* Login Form */}
-        <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">
+            <label className="block text-xs font-medium text-[#DCDCD6] mb-1">
               Email Address
             </label>
-            <div className="relative rounded-lg shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                <Mail className="w-4 h-4" />
-              </div>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="developer@example.com"
-                className="block w-full pl-9 pr-3 py-2.5 bg-slate-950/80 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-              />
-            </div>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full px-3 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white placeholder-[#666662] focus:outline-none focus:border-white/30"
+            />
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-medium text-slate-300">
-                Password
-              </label>
-            </div>
-            <div className="relative rounded-lg shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                <Lock className="w-4 h-4" />
-              </div>
+            <label className="block text-xs font-medium text-[#DCDCD6] mb-1">
+              Password
+            </label>
+            <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
-                className="block w-full pl-9 pr-10 py-2.5 bg-slate-950/80 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="w-full pl-3 pr-9 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white placeholder-[#666662] focus:outline-none focus:border-white/30"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-slate-300"
+                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-[#9E9E98] hover:text-white"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>
@@ -148,32 +121,32 @@ export const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-white font-semibold text-sm shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50"
+            className="w-full py-2.5 px-4 rounded-full bg-[#E8E8E3] hover:bg-white text-[#111113] font-semibold text-xs tracking-tight flex items-center justify-center transition-all duration-150 active:scale-[0.97] disabled:opacity-40 shadow-sm"
           >
             {loading ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Authenticating with Cognito...
+                <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                Signing in...
               </>
             ) : (
               <>
-                Sign In <ArrowRight className="w-4 h-4 ml-2" />
+                Sign In <ArrowRight className="w-3.5 h-3.5 ml-1.5 stroke-[2.2]" />
               </>
             )}
           </button>
         </form>
 
         {/* Footer links */}
-        <div className="pt-4 border-t border-slate-800 text-center text-xs text-slate-400 space-y-2">
+        <div className="pt-3 border-t border-white/5 text-center text-xs text-[#9E9E98] space-y-1.5">
           <p>
             Don't have an account?{' '}
-            <Link to="/register" className="font-semibold text-indigo-400 hover:text-indigo-300">
+            <Link to="/register" className="font-medium text-[#E8E8E3] hover:underline">
               Create an account
             </Link>
           </p>
           <p>
             Have a verification code?{' '}
-            <Link to="/confirm" className="font-semibold text-sky-400 hover:text-sky-300">
+            <Link to="/confirm" className="text-[11px] text-[#9E9E98] hover:text-[#E8E8E3]">
               Confirm email code
             </Link>
           </p>
@@ -184,4 +157,3 @@ export const Login = () => {
 };
 
 export default Login;
-

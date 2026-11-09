@@ -162,4 +162,72 @@ export const processWordToPdf = async (formData) => {
   return response.data;
 };
 
+// --- Invisible Canary Watermark API ---
+export const embedCanaryWatermark = async (formData) => {
+  const response = await api.post('/api/v1/canary/embed', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const verifyCanaryDocument = async (formData) => {
+  const response = await api.post('/api/v1/canary/verify', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const fetchCanaryTokens = async () => {
+  const response = await api.get('/api/v1/canary/tokens');
+  return response.data;
+};
+
+export const fetchCanaryToken = async (tokenId) => {
+  const response = await api.get(`/api/v1/canary/tokens/${tokenId}`);
+  return response.data;
+};
+
+export const revokeCanaryToken = async (tokenId) => {
+  const response = await api.post(`/api/v1/canary/tokens/${tokenId}/revoke`);
+  return response.data;
+};
+
+// --- Automated Workflow Studio API ---
+export const fetchWorkflows = async () => {
+  const response = await api.get('/api/v1/workflows');
+  return response.data;
+};
+
+export const fetchWorkflow = async (workflowId) => {
+  const response = await api.get(`/api/v1/workflows/${workflowId}`);
+  return response.data;
+};
+
+export const createWorkflow = async (data) => {
+  const response = await api.post('/api/v1/workflows', data);
+  return response.data;
+};
+
+export const updateWorkflow = async (workflowId, data) => {
+  const response = await api.put(`/api/v1/workflows/${workflowId}`, data);
+  return response.data;
+};
+
+export const deleteWorkflow = async (workflowId) => {
+  const response = await api.delete(`/api/v1/workflows/${workflowId}`);
+  return response.data;
+};
+
+export const runWorkflowPipeline = async (formData) => {
+  const response = await api.post('/api/v1/workflows/run', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const fetchWorkflowExecution = async (executionId) => {
+  const response = await api.get(`/api/v1/workflows/executions/${executionId}`);
+  return response.data;
+};
+
 export default api;

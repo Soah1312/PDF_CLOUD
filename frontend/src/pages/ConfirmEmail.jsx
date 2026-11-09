@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { CheckCircle2, Mail, KeyRound, Loader2, AlertCircle, ArrowRight, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Loader2, AlertCircle, ArrowRight, RefreshCw } from 'lucide-react';
 
 export const ConfirmEmail = () => {
   const [searchParams] = useSearchParams();
@@ -48,7 +48,7 @@ export const ConfirmEmail = () => {
       if (errCode === 'CodeMismatchException') {
         setErrorMessage('Invalid verification code. Please check your email and try again.');
       } else if (errCode === 'ExpiredCodeException') {
-        setErrorMessage('Verification code has expired. Click below to resend a new code.');
+        setErrorMessage('Verification code has expired. Click below to request a new code.');
       } else {
         setErrorMessage(err.message || 'Verification failed. Please try again.');
       }
@@ -77,105 +77,91 @@ export const ConfirmEmail = () => {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 p-8 rounded-2xl glass-panel border border-slate-800 shadow-2xl bg-slate-900/90">
-        <div className="text-center">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400 mb-4 shadow-inner">
-            <KeyRound className="w-6 h-6" />
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">
-            Verify Email Address
-          </h2>
-          <p className="mt-2 text-xs text-slate-400">
-            Enter the 6-digit confirmation code dispatched by Amazon Cognito.
+    <div className="min-h-[75vh] flex items-center justify-center px-4 py-12">
+      <div className="max-w-sm w-full p-6 sm:p-8 rounded-2xl border border-white/10 bg-[#121214] space-y-6 shadow-2xl">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-white">
+            Verify Email
+          </h1>
+          <p className="mt-1 text-xs text-[#9E9E98]">
+            Enter the 6-digit confirmation code sent to your email.
           </p>
         </div>
 
         {successMessage && (
-          <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+          <div className="p-3 rounded-xl border border-emerald-900/60 bg-emerald-950/20 text-xs text-emerald-300 flex items-center space-x-2">
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
             <span>{successMessage}</span>
           </div>
         )}
 
         {errorMessage && (
-          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+          <div className="p-3 rounded-xl border border-rose-900/60 bg-rose-950/20 text-xs text-rose-300 flex items-center space-x-2">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
             <span>{errorMessage}</span>
           </div>
         )}
 
-        <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">
+            <label className="block text-xs font-medium text-[#DCDCD6] mb-1">
               Email Address
             </label>
-            <div className="relative rounded-lg shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                <Mail className="w-4 h-4" />
-              </div>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="developer@example.com"
-                className="block w-full pl-9 pr-3 py-2.5 bg-slate-950/80 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-              />
-            </div>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full px-3 py-2 bg-[#161619] border border-white/10 rounded-xl text-xs text-white placeholder-[#666662] focus:outline-none focus:border-white/30"
+            />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">
-              6-Digit Verification Code
+            <label className="block text-xs font-medium text-[#DCDCD6] mb-1">
+              Verification Code
             </label>
-            <div className="relative rounded-lg shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                <KeyRound className="w-4 h-4" />
-              </div>
-              <input
-                type="text"
-                required
-                maxLength={6}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="123456"
-                className="block w-full pl-9 pr-3 py-2.5 bg-slate-950/80 border border-slate-700 rounded-lg text-base tracking-widest font-mono text-center text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-              />
-            </div>
+            <input
+              type="text"
+              required
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.trim())}
+              placeholder="123456"
+              className="w-full px-3 py-2 bg-[#161619] border border-white/10 rounded-xl text-base text-center text-white placeholder-[#666662] focus:outline-none focus:border-white/30 font-mono tracking-widest"
+            />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-white font-semibold text-sm shadow-md shadow-indigo-600/30 transition-all disabled:opacity-50"
+            className="w-full py-2.5 px-4 rounded-full bg-[#E8E8E3] hover:bg-white text-[#111113] font-semibold text-xs tracking-tight flex items-center justify-center transition-all duration-150 active:scale-[0.97] disabled:opacity-40 shadow-sm"
           >
             {loading ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Validating Code with Cognito...
+                <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                Verifying...
               </>
             ) : (
               <>
-                Confirm & Verify Account <ArrowRight className="w-4 h-4 ml-2" />
+                Confirm Code <ArrowRight className="w-3.5 h-3.5 ml-1.5 stroke-[2.2]" />
               </>
             )}
           </button>
         </form>
 
-        <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+        <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs text-[#9E9E98]">
           <button
             type="button"
             onClick={handleResend}
             disabled={resending}
-            className="flex items-center text-sky-400 hover:text-sky-300 disabled:opacity-50"
+            className="inline-flex items-center text-[11px] text-[#DCDCD6] hover:text-white disabled:opacity-50 active:scale-[0.95]"
           >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1 ${resending ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 mr-1 ${resending ? 'animate-spin' : ''}`} />
             Resend Code
           </button>
-
-          <Link to="/login" className="text-slate-400 hover:text-white">
-            Return to Sign In
+          <Link to="/login" className="text-[11px] text-[#9E9E98] hover:text-[#E8E8E3]">
+            Back to sign in &rarr;
           </Link>
         </div>
       </div>
@@ -184,4 +170,3 @@ export const ConfirmEmail = () => {
 };
 
 export default ConfirmEmail;
-

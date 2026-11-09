@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, files, pdf, history
+from app.api.v1 import auth, files, pdf, history, canary, workflows
 
 api_router = APIRouter()
 
@@ -14,5 +14,11 @@ api_router.include_router(pdf.router)
 
 # Mount processing history endpoints
 api_router.include_router(history.router)
+
+# Mount invisible canary watermark endpoints
+api_router.include_router(canary.router)
+
+# Mount automated workflow studio endpoints
+api_router.include_router(workflows.router)
 
 

@@ -51,6 +51,10 @@ frontend/dist-ssr/
 !.env.example
 !**/.env.example
 
+# Cloudflare Wrangler Cache
+.wrangler/
+**/.wrangler/
+
 # IDE & Editor
 .vscode/
 .idea/
@@ -60,5 +64,13 @@ frontend/dist-ssr/
 # OS Artifacts
 .DS_Store
 Thumbs.db
+
+# Agent and Design Skills Local Metadata
+.agent/
+.agents/
+.impeccable/
+.taste-skill/
+skills-lock.json
+
 
 

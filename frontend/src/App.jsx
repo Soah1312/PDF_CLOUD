@@ -18,7 +18,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
+        <div className="flex flex-col min-h-screen bg-[#0A0A0C] text-[#FAFAFA] font-sans selection:bg-[#E8E8E3] selection:text-[#111113]">
           <Navbar />
           <main className="flex-1">
             <Routes>
@@ -29,6 +29,7 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/confirm" element={<ConfirmEmail />} />
               <Route path="/workflows" element={<WorkflowStudio />} />
+              <Route path="/pipelines" element={<WorkflowStudio />} />
 
               {/* Protected Authenticated Member Routes */}
               <Route
@@ -52,4 +53,3 @@ function App() {
 }
 
 export default App;
-

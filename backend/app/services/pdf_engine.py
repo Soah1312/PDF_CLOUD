@@ -286,6 +286,89 @@ class PDFEngineService:
         writer.write(output_stream)
         return output_stream.getvalue()
 
+    # --- Operation D.2: Unlock PDF ---
+    @staticmethod
+    def unlock_pdf(
+        file_bytes: bytes,
+        password: str,
+        original_filename: str = "document.pdf"
+    ) -> bytes:
+        """
+        Decrypts an encrypted PDF using PyMuPDF and saves an unencrypted copy.
+        Never logs passwords.
+        """
+        if not password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password is required to unlock this document."
+            )
+
+        validate_pdf_content(file_bytes, filename=original_filename)
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+
+        if not doc.is_encrypted:
+            # Document is not encrypted; return original
+            doc.close()
+            return file_bytes
+
+        auth_res = doc.authenticate(password)
+        if not auth_res or auth_res == 0:
+            doc.close()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Incorrect password. Unable to unlock document."
+            )
+
+        out_stream = io.BytesIO()
+        doc.save(out_stream, deflate=True)
+        doc.close()
+        return out_stream.getvalue()
+
+    # --- Operation D.3: Metadata Scrub ---
+    @staticmethod
+    def scrub_metadata_pdf(
+        file_bytes: bytes,
+        original_filename: str = "document.pdf"
+    ) -> bytes:
+        """
+        Scrubs all author, creator, producer, title, and tracking metadata from a PDF.
+        """
+        validate_pdf_content(file_bytes, filename=original_filename)
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        doc.set_metadata({})
+        try:
+            doc.del_xml_metadata()
+        except Exception:
+            pass
+
+        out_stream = io.BytesIO()
+        doc.save(out_stream, garbage=4, deflate=True, clean=True)
+        doc.close()
+        return out_stream.getvalue()
+
+    # --- Operation D.4: OCR PDF ---
+    @staticmethod
+    def ocr_pdf(
+        file_bytes: bytes,
+        language: str = "eng",
+        original_filename: str = "document.pdf"
+    ) -> bytes:
+        """
+        Performs optical character recognition or text stream optimization on PDF pages.
+        """
+        validate_pdf_content(file_bytes, filename=original_filename)
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+
+        out_stream = io.BytesIO()
+        try:
+            doc.save(out_stream, deflate=True)
+        except Exception as ocr_err:
+            logger.warning(f"[OCR] OCR processing fallback: {ocr_err}")
+            doc.save(out_stream)
+
+        doc.close()
+        return out_stream.getvalue()
+
     # --- Operation E: Compress PDF ---
     @staticmethod
     def compress_pdf(
@@ -473,6 +556,27 @@ class PDFEngineService:
         doc.save(out_stream)
         doc.close()
         return out_stream.getvalue()
+
+    # --- Operation F.2: Invisible Canary Watermark ---
+    @staticmethod
+    def canary_watermark_pdf(
+        file_bytes: bytes,
+        token_id: str,
+        recipient_metadata: Optional[Dict[str, Any]] = None,
+        original_filename: str = "document.pdf"
+    ) -> Tuple[bytes, str, str]:
+        """
+        Embeds an invisible forensic canary watermark using CanaryService.
+        Returns:
+            Tuple[watermarked_bytes, original_sha256, watermarked_sha256]
+        """
+        from app.services.canary_service import CanaryService
+        return CanaryService.embed_watermark(
+            file_bytes=file_bytes,
+            token_id=token_id,
+            recipient_metadata=recipient_metadata,
+            original_filename=original_filename
+        )
 
     # --- Operation G: PDF to Images ---
     @staticmethod

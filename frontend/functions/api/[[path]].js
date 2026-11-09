@@ -30,9 +30,19 @@ export async function onRequest(context) {
   try {
     const incomingUrl = new URL(request.url);
     // Strip trailing slashes from the configured origin base
-    const baseOrigin = origin.replace(/\/+$/, "");
+    let baseOrigin = origin.trim().replace(/\/+$/, "");
+    if (!baseOrigin.startsWith("http://") && !baseOrigin.startsWith("https://")) {
+      baseOrigin = `http://${baseOrigin}`;
+    }
     // Construct the destination URL preserving exact pathname and query string
     const targetUrl = new URL(`${baseOrigin}${incomingUrl.pathname}${incomingUrl.search}`);
+
+    // Cloudflare Workers restricts direct raw IP fetch() calls (Error 1003).
+    // If an AWS EC2 IPv4 address is provided, resolve to the canonical AWS EC2 hostname.
+    const ipMatch = targetUrl.hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipMatch) {
+      targetUrl.hostname = `ec2-${ipMatch[1]}-${ipMatch[2]}-${ipMatch[3]}-${ipMatch[4]}.ap-south-1.compute.amazonaws.com`;
+    }
 
     // 2. Prepare request headers to forward upstream
     const forwardHeaders = new Headers();
@@ -45,11 +55,13 @@ export async function onRequest(context) {
       "trailers",
       "transfer-encoding",
       "upgrade",
+      "host",
+      "cdn-loop",
     ]);
 
     for (const [key, value] of request.headers.entries()) {
       const lowerKey = key.toLowerCase();
-      if (!hopByHopHeaders.has(lowerKey) && lowerKey !== "host") {
+      if (!hopByHopHeaders.has(lowerKey) && !lowerKey.startsWith("cf-")) {
         forwardHeaders.set(key, value);
       }
     }
