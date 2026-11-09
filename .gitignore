@@ -72,5 +72,8 @@ Thumbs.db
 .taste-skill/
 skills-lock.json
 
+# Test & Browser Automation
+.playwright-mcp/
+
 
 

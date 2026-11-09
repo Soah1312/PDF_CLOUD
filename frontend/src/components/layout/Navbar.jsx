@@ -91,10 +91,10 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
               </svg>
             </div>
             <div className="flex flex-col">
-              <span className="font-display text-base tracking-tight leading-none text-ink">
+              <span className="font-display text-base sm:text-lg tracking-tight leading-none text-ink">
                 CloudPDF
               </span>
-              <span className="text-[9px] font-mono tracking-mono uppercase text-ink-soft leading-none mt-0.5">
+              <span className="hidden sm:block text-[9px] font-mono tracking-mono uppercase text-ink-soft leading-none mt-0.5">
                 The Bindery
               </span>
             </div>
@@ -181,52 +181,45 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
             )}
           </div>
 
-          {/* Privacy Popover / Sheet Trigger */}
-          <div className="relative" ref={privacyRef}>
+          {/* Privacy Popover on Desktop (Hidden on mobile; mobile uses trust line) */}
+          <div className="relative hidden md:block" ref={privacyRef}>
             <button
               onClick={() => setPrivacyOpen(!privacyOpen)}
               className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-mono text-ink-soft bg-paper/60 border border-rule/80 rounded hover:bg-kraft/40 hover:text-ink transition-colors touch-target"
               title="Inspect zero-retention architecture"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-moss shrink-0"></span>
-              <span className="hidden sm:inline">Stateless & In-Memory</span>
-              <span className="sm:hidden">Private</span>
+              <span>Stateless & In-Memory</span>
               <Info className="w-3 h-3 text-ink-faint shrink-0" strokeWidth={1.5} />
             </button>
 
-            {/* Privacy Sheet on Mobile / Popover on Desktop */}
+            {/* Privacy Popover on Desktop */}
             {privacyOpen && (
-              <>
-                <div
-                  className="fixed sm:hidden inset-0 bg-ink/40 z-40"
-                  onClick={() => setPrivacyOpen(false)}
-                />
-                <div className="fixed sm:absolute bottom-0 sm:bottom-auto left-0 sm:left-0 sm:mt-1.5 w-full sm:w-80 bg-vellum border-t sm:border border-rule sm:rounded-md shadow-ink-drag sm:shadow-ink-lift p-4 z-50 text-xs space-y-2.5 pb-safe animate-sheet-up sm:animate-none">
-                  <div className="flex items-center justify-between border-b border-rule pb-2">
-                    <div className="flex items-center gap-1.5 font-medium text-ink">
-                      <ShieldCheck className="w-4 h-4 text-moss" strokeWidth={1.5} />
-                      <span>Print-Shop Privacy Guarantee</span>
-                    </div>
-                    <button
-                      onClick={() => setPrivacyOpen(false)}
-                      className="p-1 text-ink-faint hover:text-ink"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+              <div className="absolute top-full left-0 mt-1.5 w-80 bg-vellum border border-rule rounded-md shadow-ink-lift p-4 z-50 text-xs space-y-2.5">
+                <div className="flex items-center justify-between border-b border-rule pb-2">
+                  <div className="flex items-center gap-1.5 font-medium text-ink">
+                    <ShieldCheck className="w-4 h-4 text-moss" strokeWidth={1.5} />
+                    <span>Print-Shop Privacy Guarantee</span>
                   </div>
-                  <p className="text-ink-soft leading-relaxed text-[11px]">
-                    Files uploaded to guest bench tools are strictly processed in volatile server RAM. They are{' '}
-                    <strong className="text-ink font-semibold">discarded immediately</strong> upon download or timeout.
-                  </p>
-                  <p className="text-ink-soft leading-relaxed text-[11px]">
-                    Documents are only stored persistently when an authenticated user explicitly clicks{' '}
-                    <span className="font-mono text-ink bg-kraft px-1 py-0.5 rounded text-[10px]">
-                      Save to Vault
-                    </span>
-                    , where they receive client-isolated AES-256 encryption.
-                  </p>
+                  <button
+                    onClick={() => setPrivacyOpen(false)}
+                    className="p-1 text-ink-faint hover:text-ink"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              </>
+                <p className="text-ink-soft leading-relaxed text-[11px]">
+                  Files uploaded to guest bench tools are strictly processed in volatile server RAM. They are{' '}
+                  <strong className="text-ink font-semibold">discarded immediately</strong> upon download or timeout.
+                </p>
+                <p className="text-ink-soft leading-relaxed text-[11px]">
+                  Documents are only stored persistently when an authenticated user explicitly clicks{' '}
+                  <span className="font-mono text-ink bg-kraft px-1 py-0.5 rounded text-[10px]">
+                    Save to Vault
+                  </span>
+                  , where they receive client-isolated AES-256 encryption.
+                </p>
+              </div>
             )}
           </div>
         </div>
@@ -249,14 +242,23 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
-          {/* Mobile Search Button */}
-          <button
-            onClick={onOpenCommandPalette}
-            className="md:hidden p-2 rounded border border-rule bg-paper text-ink-soft hover:text-ink touch-target flex items-center justify-center"
-            aria-label="Open search palette"
-          >
-            <Search className="w-4 h-4" strokeWidth={1.5} />
-          </button>
+          {/* Mobile Right Controls: Avatar if signed in, small "Sign in" text button if guest */}
+          {isAuthenticated ? (
+            <Link
+              to="/workspace"
+              className="md:hidden flex items-center justify-center w-8 h-8 rounded-full border border-ink bg-kraft text-ink font-mono text-xs font-semibold active:scale-95 transition-transform touch-target shadow-xs"
+              aria-label="Account / Vault"
+            >
+              {user?.email?.charAt(0).toUpperCase() || 'M'}
+            </Link>
+          ) : (
+            <Link
+              to="/login"
+              className="md:hidden px-2.5 py-1.5 text-xs font-semibold text-ink hover:text-red transition-colors touch-target flex items-center"
+            >
+              Sign in
+            </Link>
+          )}
 
           {/* Desktop Cloud Vault Direct Link */}
           <NavLink
@@ -273,12 +275,12 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
             <span>Cloud Vault</span>
           </NavLink>
 
-          {/* Account Controls */}
+          {/* Desktop Account Controls */}
           {isAuthenticated ? (
-            <div className="flex items-center gap-2 pl-1 sm:pl-2 sm:border-l border-rule">
+            <div className="hidden md:flex items-center gap-2 pl-2 border-l border-rule">
               <Link
                 to="/workspace"
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-kraft/40 border border-rule text-xs text-ink max-w-[140px] touch-target"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-kraft/40 border border-rule text-xs text-ink max-w-[140px]"
                 title={user?.email}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-moss shrink-0"></span>
@@ -286,26 +288,26 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
               </Link>
               <button
                 onClick={handleLogout}
-                className="hidden sm:flex p-1.5 rounded border border-rule hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
+                className="p-1.5 rounded border border-rule hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
                 title="Sign out of bench"
               >
                 <LogOut className="w-3.5 h-3.5" strokeWidth={1.5} />
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2">
               <Link
                 to="/login"
-                className="hidden sm:inline-block px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:text-ink transition-colors"
+                className="px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:text-ink transition-colors"
               >
                 Sign in
               </Link>
               <Link
                 to="/register"
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-red text-vellum font-medium text-xs hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px touch-target"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-red text-vellum font-medium text-xs hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px"
               >
                 <span>Open Vault</span>
-                <ArrowRight className="w-3 h-3 hidden sm:inline-block" strokeWidth={2} />
+                <ArrowRight className="w-3 h-3" strokeWidth={2} />
               </Link>
             </div>
           )}

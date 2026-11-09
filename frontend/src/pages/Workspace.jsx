@@ -576,7 +576,7 @@ export default function Workspace() {
                         <button
                           type="button"
                           onClick={() => toggleSelect(file.id)}
-                          className="p-1.5 text-ink-soft hover:text-ink focus:outline-none min-w-[36px] min-h-[36px] flex items-center justify-center shrink-0"
+                          className="p-1 text-ink-soft hover:text-ink focus:outline-none min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0 touch-target"
                           title={isSelected ? 'Deselect folio' : 'Select folio'}
                         >
                           {isSelected ? (
@@ -630,15 +630,15 @@ export default function Workspace() {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
                           {/* Preview Button */}
                           <button
                             type="button"
                             onClick={() => setPreviewFile(file)}
-                            className="p-2 sm:p-1.5 rounded border border-rule bg-paper hover:bg-kraft text-ink transition-colors min-w-[40px] min-h-[40px] sm:min-w-[32px] sm:min-h-[32px] flex items-center justify-center"
+                            className="p-2 sm:p-1.5 rounded border border-rule bg-paper hover:bg-kraft active:bg-kraft/80 text-ink transition-colors min-w-[44px] min-h-[44px] sm:min-w-[34px] sm:min-h-[34px] flex items-center justify-center touch-target"
                             title="Preview Folio"
                           >
-                            <Eye className="w-4 h-4 sm:w-3.5 sm:h-3.5" strokeWidth={1.5} />
+                            <Eye className="w-4 h-4" strokeWidth={1.5} />
                           </button>
 
                           {/* Download Button */}
@@ -646,10 +646,10 @@ export default function Workspace() {
                             <a
                               href={file.download_url}
                               download={file.original_filename}
-                              className="p-2 sm:p-1.5 rounded border border-rule bg-paper hover:bg-kraft text-ink transition-colors min-w-[40px] min-h-[40px] sm:min-w-[32px] sm:min-h-[32px] flex items-center justify-center"
+                              className="p-2 sm:p-1.5 rounded border border-rule bg-paper hover:bg-kraft active:bg-kraft/80 text-ink transition-colors min-w-[44px] min-h-[44px] sm:min-w-[34px] sm:min-h-[34px] flex items-center justify-center touch-target"
                               title="Download Folio"
                             >
-                              <Download className="w-4 h-4 sm:w-3.5 sm:h-3.5" strokeWidth={1.5} />
+                              <Download className="w-4 h-4" strokeWidth={1.5} />
                             </a>
                           )}
 
@@ -657,10 +657,10 @@ export default function Workspace() {
                           <button
                             type="button"
                             onClick={() => handleDeleteWithUndo(file)}
-                            className="p-2 sm:p-1.5 rounded border border-rule hover:border-red/40 bg-paper hover:bg-red/10 text-ink-soft hover:text-red transition-colors min-w-[40px] min-h-[40px] sm:min-w-[32px] sm:min-h-[32px] flex items-center justify-center"
+                            className="p-2 sm:p-1.5 rounded border border-rule hover:border-red/40 bg-paper hover:bg-red/10 active:bg-red/20 text-ink-soft hover:text-red transition-colors min-w-[44px] min-h-[44px] sm:min-w-[34px] sm:min-h-[34px] flex items-center justify-center touch-target"
                             title="Remove from Vault"
                           >
-                            <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" strokeWidth={1.5} />
+                            <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                           </button>
                         </div>
                       </div>
@@ -720,7 +720,7 @@ export default function Workspace() {
                 </div>
               </div>
             ) : (
-              <div className="border border-rule rounded-md bg-vellum overflow-hidden">
+              <div className="border border-rule rounded-md bg-vellum overflow-x-auto overscroll-x-contain">
                 <table className="w-full text-left border-collapse text-xs font-mono">
                   <thead>
                     <tr className="border-b border-rule bg-paper/60 text-ink-faint text-[10px] uppercase tracking-mono">

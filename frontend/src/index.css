@@ -185,7 +185,7 @@
 @keyframes fade-rise {
   0% {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   100% {
     opacity: 1;
@@ -195,6 +195,46 @@
 
 .animate-fade-rise {
   animation: fade-rise var(--t-base) var(--ease-out) forwards;
+}
+
+/* Paper Fan-out Illustration Keyframes */
+@keyframes paper-fan-1 {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate(-7px, 3px) rotate(-6deg);
+  }
+}
+
+@keyframes paper-fan-2 {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate(6px, 1px) rotate(4deg);
+  }
+}
+
+@keyframes paper-fan-3 {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+.animate-fan-1 {
+  animation: paper-fan-1 420ms var(--ease-out) forwards;
+}
+
+.animate-fan-2 {
+  animation: paper-fan-2 420ms var(--ease-out) 60ms forwards;
+}
+
+.animate-fan-3 {
+  animation: paper-fan-3 420ms var(--ease-out) 120ms forwards;
 }
 
 /* Stamp Thump Animation (Scale 1.35 to 1, rotate -6deg, brief blur settling) */
@@ -324,6 +364,12 @@
   }
 
   .animate-marching-border {
+    animation: none !important;
+  }
+
+  .animate-fan-1,
+  .animate-fan-2,
+  .animate-fan-3 {
     animation: none !important;
   }
 

@@ -3,17 +3,21 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Layers, Archive, User, Lock, Search } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
-export default function MobileBottomNav({ onOpenToolsSheet, onOpenSearchSheet }) {
+export default function MobileBottomNav({ onOpenToolsSheet }) {
   const location = useLocation();
-  const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+
+  const triggerHaptic = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+  };
 
   // Detect virtual keyboard opening to hide bottom bar
   useEffect(() => {
     const handleViewportResize = () => {
       if (window.visualViewport) {
-        // If visual viewport is significantly shorter than window height, keyboard is open
         const isOpen = window.visualViewport.height < window.innerHeight - 140;
         setIsKeyboardOpen(isOpen);
       }
@@ -25,40 +29,41 @@ export default function MobileBottomNav({ onOpenToolsSheet, onOpenSearchSheet })
     }
   }, []);
 
-  // Check if current route is a tool page where the sticky action bar takes precedence
-  const isToolPage = location.pathname.startsWith('/tools/');
-
-  // If keyboard is open or inside tool runner with files queued, we tuck the bottom bar away
-  if (isKeyboardOpen) {
+  // Hide bottom tab bar if virtual keyboard is open or on tool runner page where sticky action bar takes precedence
+  if (isKeyboardOpen || location.pathname.startsWith('/tools/')) {
     return null;
   }
 
   const isHomeActive = location.pathname === '/';
   const isVaultActive = location.pathname === '/workspace';
-  const isAccountActive = location.pathname === '/login' || location.pathname === '/register';
+  const isAccountActive =
+    location.pathname === '/login' ||
+    location.pathname === '/register' ||
+    (isAuthenticated && location.pathname.startsWith('/account'));
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-vellum/95 backdrop-blur-md border-t border-rule pb-safe transition-transform duration-200"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-vellum border-t border-rule pb-safe transition-transform duration-200 select-none shadow-[0_-2px_6px_rgba(36,27,20,0.04)]"
       aria-label="Mobile Bottom Navigation"
     >
-      <div className="h-14 flex items-center justify-around px-2 relative">
+      <div className="h-14 flex items-center justify-around px-1 relative">
         {/* Tab 1: Home */}
         <NavLink
           to="/"
-          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center touch-target relative touch-press ${
+          onClick={triggerHaptic}
+          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center touch-target relative ${
             isHomeActive ? 'text-ink font-semibold' : 'text-ink-soft hover:text-ink'
           }`}
         >
           <Home
-            className={`w-5 h-5 transition-transform duration-160 ${
-              isHomeActive ? 'scale-110 text-red stroke-[2]' : 'stroke-[1.5]'
+            className={`w-[22px] h-[22px] transition-transform duration-120 ${
+              isHomeActive ? 'text-ink stroke-[2]' : 'text-ink-soft stroke-[1.5]'
             }`}
           />
-          <span className="text-[10px] font-mono tracking-mono mt-0.5">Home</span>
+          <span className="text-[11px] font-mono tracking-mono mt-0.5 leading-none">Home</span>
           {isHomeActive && (
             <span
-              className="absolute bottom-1 w-5 h-0.5 bg-marigold rounded-full"
+              className="absolute bottom-1 w-6 h-0.5 bg-marigold rounded-full"
               aria-hidden="true"
             />
           )}
@@ -66,65 +71,60 @@ export default function MobileBottomNav({ onOpenToolsSheet, onOpenSearchSheet })
 
         {/* Tab 2: Tools (Opens Full-Height Bottom Sheet) */}
         <button
-          onClick={onOpenToolsSheet}
-          className="flex flex-col items-center justify-center flex-1 h-full py-1 text-center touch-target relative touch-press text-ink-soft hover:text-ink focus:outline-none"
+          onClick={() => {
+            triggerHaptic();
+            onOpenToolsSheet?.();
+          }}
+          className="flex flex-col items-center justify-center flex-1 h-full py-1 text-center touch-target relative text-ink-soft hover:text-ink focus:outline-none"
           aria-label="Open Bench Tools Sheet"
         >
-          <Layers className="w-5 h-5 stroke-[1.5]" />
-          <span className="text-[10px] font-mono tracking-mono mt-0.5">Tools</span>
+          <Layers className="w-[22px] h-[22px] stroke-[1.5] text-ink-soft" />
+          <span className="text-[11px] font-mono tracking-mono mt-0.5 leading-none">Tools</span>
         </button>
 
-        {/* Tab 3: Search / Command Palette */}
-        <button
-          onClick={onOpenSearchSheet}
-          className="flex flex-col items-center justify-center flex-1 h-full py-1 text-center touch-target relative touch-press text-ink-soft hover:text-ink focus:outline-none"
-          aria-label="Open Search Palette"
-        >
-          <Search className="w-5 h-5 stroke-[1.5]" />
-          <span className="text-[10px] font-mono tracking-mono mt-0.5">Search</span>
-        </button>
-
-        {/* Tab 4: Vault */}
+        {/* Tab 3: Vault */}
         <NavLink
           to="/workspace"
-          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center touch-target relative touch-press ${
+          onClick={triggerHaptic}
+          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center touch-target relative ${
             isVaultActive ? 'text-ink font-semibold' : 'text-ink-soft hover:text-ink'
           }`}
         >
           <Archive
-            className={`w-5 h-5 transition-transform duration-160 ${
-              isVaultActive ? 'scale-110 text-red stroke-[2]' : 'stroke-[1.5]'
+            className={`w-[22px] h-[22px] transition-transform duration-120 ${
+              isVaultActive ? 'text-ink stroke-[2]' : 'text-ink-soft stroke-[1.5]'
             }`}
           />
-          <span className="text-[10px] font-mono tracking-mono mt-0.5">Vault</span>
+          <span className="text-[11px] font-mono tracking-mono mt-0.5 leading-none">Vault</span>
           {isVaultActive && (
             <span
-              className="absolute bottom-1 w-5 h-0.5 bg-marigold rounded-full"
+              className="absolute bottom-1 w-6 h-0.5 bg-marigold rounded-full"
               aria-hidden="true"
             />
           )}
         </NavLink>
 
-        {/* Tab 5: Account */}
+        {/* Tab 4: Account */}
         <NavLink
           to={isAuthenticated ? '/workspace' : '/login'}
-          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center touch-target relative touch-press ${
+          onClick={triggerHaptic}
+          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center touch-target relative ${
             isAccountActive ? 'text-ink font-semibold' : 'text-ink-soft hover:text-ink'
           }`}
         >
           {isAuthenticated ? (
-            <div className="w-5 h-5 rounded-full border border-ink bg-kraft flex items-center justify-center text-[10px] font-mono font-bold text-ink">
+            <div className="w-[22px] h-[22px] rounded-full border border-ink bg-kraft flex items-center justify-center text-[10px] font-mono font-bold text-ink">
               {user?.email?.charAt(0).toUpperCase() || 'M'}
             </div>
           ) : (
-            <User className="w-5 h-5 stroke-[1.5]" />
+            <User className="w-[22px] h-[22px] stroke-[1.5] text-ink-soft" />
           )}
-          <span className="text-[10px] font-mono tracking-mono mt-0.5">
-            {isAuthenticated ? 'Account' : 'Sign In'}
+          <span className="text-[11px] font-mono tracking-mono mt-0.5 leading-none">
+            {isAuthenticated ? 'Account' : 'Sign in'}
           </span>
           {isAccountActive && (
             <span
-              className="absolute bottom-1 w-5 h-0.5 bg-marigold rounded-full"
+              className="absolute bottom-1 w-6 h-0.5 bg-marigold rounded-full"
               aria-hidden="true"
             />
           )}
