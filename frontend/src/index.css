@@ -42,12 +42,14 @@
     color: var(--ink);
     font-family: 'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
 
-  /* Accessible focus ring: visible 2px cyan with 2px offset */
+  /* Accessible focus ring: visible 2px cyan with 2px offset on EVERY interactive element */
   *:focus-visible {
-    outline: 2px solid var(--cyan);
-    outline-offset: 2px;
+    outline: 2px solid var(--cyan) !important;
+    outline-offset: 2px !important;
   }
 
   /* Paper craft selection */
@@ -90,25 +92,41 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
-/* 12-Column Grid Hairline Background (Visible editorial column rules when enabled) */
-.editorial-grid-lines {
-  background-image: linear-gradient(to right, rgba(213, 198, 168, 0.4) 1px, transparent 1px);
-  background-size: calc(100% / 12) 100%;
+/* Soft Paper Shimmer Skeleton for Lazy Thumbnails */
+@keyframes paper-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
-/* Dotted Leader for Table of Contents / Specimen index */
-.dotted-leader {
-  display: flex;
-  align-items: baseline;
-  width: 100%;
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--paper) 0%,
+    var(--kraft) 50%,
+    var(--paper) 100%
+  );
+  background-size: 200% 100%;
+  animation: paper-shimmer 1.6s infinite ease-in-out;
 }
-.dotted-leader-fill {
-  flex-grow: 1;
-  border-bottom: 1.5px dotted var(--rule-strong);
-  margin: 0 10px;
-  min-width: 24px;
-  height: 0;
-  align-self: center;
+
+/* Staggered Fade-Rise Entrance */
+@keyframes fade-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-rise {
+  animation: fade-rise var(--t-base) var(--ease-out) forwards;
 }
 
 /* Stamp Thump Animation (Scale 1.35 to 1, rotate -6deg, brief blur settling) */
@@ -152,7 +170,47 @@
   animation: marching-border 1.5s linear infinite;
 }
 
-/* Reduced Motion Respect */
+/* Compress Squashing Stack Animation */
+@keyframes compress-squash {
+  0% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.95);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-compress-squash {
+  animation: compress-squash var(--t-slow) var(--ease-out);
+}
+
+/* View Transitions API (Feature-detected Native Page Morphing) */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root) {
+  animation: 90ms cubic-bezier(0.2, 0.8, 0.2, 1) both fade-out;
+}
+
+::view-transition-new(root) {
+  animation: 140ms cubic-bezier(0.2, 0.8, 0.2, 1) both fade-in;
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Reduced Motion Respect: disable all physical motion, tilt, odometer, and marching borders */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
     animation-duration: 0.01ms !important;
@@ -169,5 +227,18 @@
     animation: none !important;
     transform: rotate(-6deg) !important;
     opacity: 1 !important;
+  }
+
+  .skeleton-shimmer {
+    animation: none !important;
+  }
+
+  .animate-compress-squash {
+    animation: none !important;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
   }
 }
