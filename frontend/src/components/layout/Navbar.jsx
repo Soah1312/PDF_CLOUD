@@ -1,116 +1,64 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
-  Layers,
-  FileText,
-  Minimize2,
-  FileCode,
-  Lock,
-  FolderLock,
+  ChevronDown,
+  Search,
+  Archive,
   LogOut,
+  LogIn,
+  ShieldCheck,
   Menu,
   X,
-  ArrowRight
+  ArrowRight,
+  Info,
 } from 'lucide-react';
+import { BINDERY_TOOLS } from '../../config/tools';
 
-const BRAND_MARK = (
-  <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" aria-hidden="true">
-    <rect width="24" height="24" rx="4.5" fill="#E8E8E3" />
-    <path d="M6 6h8.6L18 9.35v8.15H9.15L6 14.35V6Z" fill="#111" />
-    <path d="M9 9h5.15L15 9.85V15H9.85L9 14.15V9Z" fill="#E8E8E3" />
-    <path d="M12 9v6M9 12h6" stroke="#111" strokeWidth=".7" />
-  </svg>
-);
-
-const DOCK_SHORTCUTS = [
-  {
-    id: 'merge',
-    label: 'Merge',
-    to: '/tools/merge',
-    icon: Layers,
-    color: 'text-amber-400 group-hover:text-amber-300',
-    dot: 'bg-amber-400',
-  },
-  {
-    id: 'split',
-    label: 'Split',
-    to: '/tools/split',
-    icon: FileText,
-    color: 'text-sky-400 group-hover:text-sky-300',
-    dot: 'bg-sky-400',
-  },
-  {
-    id: 'compress',
-    label: 'Compress',
-    to: '/tools/compress',
-    icon: Minimize2,
-    color: 'text-emerald-400 group-hover:text-emerald-300',
-    dot: 'bg-emerald-400',
-  },
-  {
-    id: 'convert',
-    label: 'To Word',
-    to: '/tools/to-word',
-    icon: FileCode,
-    color: 'text-blue-400 group-hover:text-blue-300',
-    dot: 'bg-blue-400',
-  },
-  {
-    id: 'protect',
-    label: 'Protect',
-    to: '/tools/protect',
-    icon: Lock,
-    color: 'text-violet-400 group-hover:text-violet-300',
-    dot: 'bg-violet-400',
-  },
-  {
-    id: 'vault',
-    label: 'Vault',
-    to: '/workspace',
-    icon: FolderLock,
-    color: 'text-[#E8E8E3] group-hover:text-white',
-    dot: 'bg-[#E8E8E3]',
-  },
-];
-
-export const Navbar = () => {
+export default function Navbar({ onOpenCommandPalette }) {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Proximity dock tracking
-  const dockRef = useRef(null);
-  const itemRefs = useRef([]);
-  const [scales, setScales] = useState(new Array(DOCK_SHORTCUTS.length).fill(1));
-  const [isHovered, setIsHovered] = useState(false);
+  const toolsDropdownRef = useRef(null);
+  const privacyRef = useRef(null);
 
-  const handleMouseMove = (e) => {
-    if (!dockRef.current) return;
-    const proximity = 90;
-    const maxScale = 1.2;
-
-    const newScales = itemRefs.current.map((el) => {
-      if (!el) return 1;
-      const rect = el.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const dist = Math.abs(e.clientX - centerX);
-
-      if (dist < proximity) {
-        const factor = Math.cos((dist / proximity) * (Math.PI / 2));
-        return 1 + factor * (maxScale - 1);
+  // Close dropdowns on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(event.target)) {
+        setToolsOpen(false);
       }
-      return 1;
-    });
+      if (privacyRef.current && !privacyRef.current.contains(event.target)) {
+        setPrivacyOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-    setScales(newScales);
-    setIsHovered(true);
-  };
-
-  const handleMouseLeave = () => {
-    setScales(new Array(DOCK_SHORTCUTS.length).fill(1));
-    setIsHovered(false);
-  };
+  // Group tools for the menu
+  const toolGroups = [
+    {
+      name: 'Merge & Split',
+      tools: BINDERY_TOOLS.filter((t) => t.group === 'Merge & Split'),
+    },
+    {
+      name: 'Compress & Optimize',
+      tools: BINDERY_TOOLS.filter((t) => t.group === 'Compress'),
+    },
+    {
+      name: 'Convert & Formats',
+      tools: BINDERY_TOOLS.filter((t) => t.group === 'Convert'),
+    },
+    {
+      name: 'Security & Forensics',
+      tools: BINDERY_TOOLS.filter((t) => t.group === 'Security'),
+    },
+  ];
 
   const handleLogout = () => {
     logout();
@@ -118,98 +66,246 @@ export const Navbar = () => {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full pt-3 pb-2 px-4 pointer-events-none">
-      <div className="max-w-6xl mx-auto flex items-center justify-between pointer-events-auto">
-        {/* Brand Identity */}
-        <Link
-          to="/"
-          className="flex items-center space-x-2.5 px-3.5 py-1.5 rounded-full bg-[#121214]/90 backdrop-blur-md border border-white/10 hover:border-white/20 transition-all duration-150 active:scale-[0.97]"
-        >
-          {BRAND_MARK}
-          <span className="font-semibold text-xs tracking-tight text-[#E8E8E3]">
-            CloudPDF
-          </span>
-        </Link>
-
-        {/* Center: Animated Top Dock with Frequently Used Tools */}
-        <nav
-          ref={dockRef}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          className="hidden md:flex items-center p-1 rounded-full bg-[#121214]/95 backdrop-blur-md border border-white/10 shadow-lg shadow-black/50"
-          aria-label="Frequently Used Features"
-        >
-          {DOCK_SHORTCUTS.map((item, idx) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.id}
-                to={item.to}
-                ref={(el) => (itemRefs.current[idx] = el)}
-                style={{
-                  transform: `scale(${scales[idx] || 1})`,
-                  transition: isHovered
-                    ? 'transform 80ms ease-out'
-                    : 'transform 200ms cubic-bezier(0.23, 1, 0.32, 1)',
-                }}
-                className={({ isActive }) =>
-                  `group flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors duration-150 active:scale-[0.96] origin-center ${
-                    isActive
-                      ? 'bg-white/10 text-white font-semibold'
-                      : 'text-[#9E9E98] hover:text-[#E8E8E3] hover:bg-white/5'
-                  }`
-                }
+    <header className="sticky top-0 z-40 w-full bg-vellum/95 backdrop-blur-md border-b border-rule">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+        {/* Left: Brand + Tools Menu + Privacy Badge */}
+        <div className="flex items-center gap-6">
+          {/* Brand Mark */}
+          <Link
+            to="/"
+            className="flex items-center gap-2.5 group focus:outline-none"
+            aria-label="CloudPDF Studio Home"
+          >
+            <div className="w-7 h-7 rounded border border-ink bg-paper flex items-center justify-center transition-transform duration-120 group-hover:-translate-y-0.5 shadow-sm">
+              {/* Bench booklet glyph */}
+              <svg
+                viewBox="0 0 24 24"
+                className="w-4 h-4 text-ink"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <Icon className={`w-3.5 h-3.5 transition-colors ${item.color}`} />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
-        </nav>
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                <line x1="9" y1="7" x2="15" y2="7" />
+                <line x1="9" y1="11" x2="13" y2="11" />
+              </svg>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-display text-base tracking-tight leading-none text-ink">
+                CloudPDF
+              </span>
+              <span className="text-[9px] font-mono tracking-mono uppercase text-ink-soft leading-none mt-0.5">
+                The Bindery
+              </span>
+            </div>
+          </Link>
 
-        {/* Right: Actions */}
-        <div className="hidden md:flex items-center space-x-2">
+          {/* Tools Dropdown Trigger */}
+          <div className="relative hidden md:block" ref={toolsDropdownRef}>
+            <button
+              onClick={() => setToolsOpen(!toolsOpen)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded border transition-colors ${
+                toolsOpen
+                  ? 'bg-kraft border-rule-strong text-ink'
+                  : 'bg-paper/70 border-rule hover:bg-kraft/50 text-ink-soft hover:text-ink'
+              }`}
+              aria-expanded={toolsOpen}
+              aria-haspopup="true"
+            >
+              <span>Bench Tools</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                  toolsOpen ? 'rotate-180' : ''
+                }`}
+                strokeWidth={1.5}
+              />
+            </button>
+
+            {/* Tools Mega Menu */}
+            {toolsOpen && (
+              <div
+                className="absolute left-0 mt-1.5 w-[560px] bg-vellum border border-rule rounded-md shadow-ink-lift p-4 grid grid-cols-2 gap-4 z-50 animate-in fade-in duration-120"
+                style={{ animation: 'scaleIn 120ms ease-out forwards' }}
+              >
+                {toolGroups.map((group) => (
+                  <div key={group.name} className="space-y-1.5">
+                    <div className="text-[10px] font-mono tracking-mono uppercase text-ink-faint px-2 pb-1 border-b border-rule/60">
+                      {group.name}
+                    </div>
+                    {group.tools.map((tool) => {
+                      const Icon = tool.icon;
+                      return (
+                        <Link
+                          key={tool.id}
+                          to={tool.to}
+                          onClick={() => setToolsOpen(false)}
+                          className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-kraft/60 group transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Icon className="w-3.5 h-3.5 text-ink-soft group-hover:text-ink shrink-0" strokeWidth={1.5} />
+                            <span className="text-xs font-medium text-ink truncate">
+                              {tool.title}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono tracking-mono uppercase text-ink-faint group-hover:text-ink-soft shrink-0">
+                            {tool.verb}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ))}
+
+                <div className="col-span-2 pt-2 border-t border-rule flex items-center justify-between text-[11px] font-mono text-ink-soft">
+                  <Link
+                    to="/workflows"
+                    onClick={() => setToolsOpen(false)}
+                    className="hover:text-ink underline decoration-rule-strong"
+                  >
+                    Open Pipeline Studio →
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setToolsOpen(false);
+                      onOpenCommandPalette?.();
+                    }}
+                    className="hover:text-ink flex items-center gap-1"
+                  >
+                    <span>Full index</span>
+                    <kbd className="px-1 py-0.2 bg-kraft border border-rule rounded text-[9px]">
+                      Ctrl K
+                    </kbd>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Privacy Popover ("Stateless & In-Memory") */}
+          <div className="relative hidden lg:block" ref={privacyRef}>
+            <button
+              onClick={() => setPrivacyOpen(!privacyOpen)}
+              className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-mono text-ink-soft bg-paper/60 border border-rule/80 rounded hover:bg-kraft/40 hover:text-ink transition-colors"
+              title="Inspect zero-retention architecture"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-moss"></span>
+              <span>Stateless & In-Memory</span>
+              <Info className="w-3 h-3 text-ink-faint" strokeWidth={1.5} />
+            </button>
+
+            {privacyOpen && (
+              <div className="absolute left-0 mt-1.5 w-72 bg-vellum border border-rule rounded-md shadow-ink-lift p-3.5 z-50 text-xs space-y-2">
+                <div className="flex items-center justify-between border-b border-rule pb-2">
+                  <div className="flex items-center gap-1.5 font-medium text-ink">
+                    <ShieldCheck className="w-4 h-4 text-moss" strokeWidth={1.5} />
+                    <span>Print-Shop Privacy Guarantee</span>
+                  </div>
+                  <button
+                    onClick={() => setPrivacyOpen(false)}
+                    className="text-ink-faint hover:text-ink"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-ink-soft leading-relaxed text-[11px]">
+                  Files uploaded to guest bench tools are strictly processed in volatile server RAM. They are{' '}
+                  <strong className="text-ink font-semibold">discarded immediately</strong> upon download or timeout.
+                </p>
+                <p className="text-ink-soft leading-relaxed text-[11px]">
+                  Documents are only stored persistently when an authenticated user explicitly clicks{' '}
+                  <span className="font-mono text-ink bg-kraft px-1 py-0.5 rounded text-[10px]">
+                    Save to Vault
+                  </span>
+                  , where they receive client-isolated AES-256 encryption.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Center: Command Palette Trigger */}
+        <div className="hidden sm:flex items-center flex-1 max-w-xs mx-4">
+          <button
+            onClick={onOpenCommandPalette}
+            className="w-full flex items-center justify-between px-3 py-1.5 rounded border border-rule bg-paper hover:bg-kraft/50 text-ink-soft hover:text-ink text-xs transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Search className="w-3.5 h-3.5 text-ink-faint" strokeWidth={1.5} />
+              <span>Search bench tools...</span>
+            </div>
+            <kbd className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono tracking-mono text-ink-soft bg-vellum border border-rule rounded">
+              Ctrl K
+            </kbd>
+          </button>
+        </div>
+
+        {/* Right: Vault & Account */}
+        <div className="hidden md:flex items-center gap-3">
+          {/* Cloud Vault Direct Link */}
+          <NavLink
+            to="/workspace"
+            className={({ isActive }) =>
+              `flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
+                isActive
+                  ? 'bg-kraft border-rule-strong text-ink'
+                  : 'bg-paper/70 border-rule hover:bg-kraft/40 text-ink-soft hover:text-ink'
+              }`
+            }
+          >
+            <Archive className="w-3.5 h-3.5 text-ink-soft" strokeWidth={1.5} />
+            <span>Cloud Vault</span>
+          </NavLink>
+
+          {/* Account state */}
           {isAuthenticated ? (
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-[#121214]/90 backdrop-blur-md border border-white/10 text-xs text-[#E8E8E3]">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                <span className="max-w-[120px] truncate text-[11px] font-medium">
-                  {user?.email}
-                </span>
+            <div className="flex items-center gap-2 pl-2 border-l border-rule">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-kraft/40 border border-rule text-xs text-ink max-w-[150px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-moss shrink-0"></span>
+                <span className="truncate text-[11px] font-mono">{user?.email}</span>
               </div>
               <button
                 onClick={handleLogout}
-                className="px-3 py-1.5 rounded-full bg-[#121214]/90 border border-white/10 text-xs text-[#9E9E98] hover:text-white hover:bg-white/5 transition-all duration-150 active:scale-[0.97]"
-                title="Sign out"
+                className="p-1.5 rounded border border-rule hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
+                title="Sign out of bench"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-3.5 h-3.5" strokeWidth={1.5} />
               </button>
             </div>
           ) : (
-            <div className="flex items-center space-x-1.5">
+            <div className="flex items-center gap-2">
               <Link
                 to="/login"
-                className="px-3 py-1.5 rounded-full text-xs font-medium text-[#9E9E98] hover:text-[#E8E8E3] transition-colors active:scale-[0.97]"
+                className="px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:text-ink transition-colors"
               >
                 Sign in
               </Link>
               <Link
                 to="/register"
-                className="inline-flex items-center space-x-1 px-3.5 py-1.5 rounded-full bg-[#E8E8E3] text-[#111113] font-semibold text-xs hover:bg-white transition-all duration-150 active:scale-[0.97] shadow-sm"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-red text-vellum font-medium text-xs hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px"
               >
                 <span>Open Vault</span>
-                <ArrowRight className="w-3 h-3 stroke-[2.2]" />
+                <ArrowRight className="w-3 h-3" strokeWidth={2} />
               </Link>
             </div>
           )}
         </div>
 
-        {/* Mobile menu button */}
-        <div className="flex md:hidden items-center">
+        {/* Mobile Hamburger Button */}
+        <div className="flex md:hidden items-center gap-2">
+          <button
+            onClick={onOpenCommandPalette}
+            className="p-2 rounded border border-rule bg-paper text-ink-soft hover:text-ink"
+            aria-label="Search"
+          >
+            <Search className="w-4 h-4" strokeWidth={1.5} />
+          </button>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-full bg-[#121214]/90 border border-white/10 text-[#E8E8E3] active:scale-[0.95]"
-            aria-label="Toggle menu"
+            className="p-2 rounded border border-rule bg-paper text-ink"
+            aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
@@ -218,51 +314,61 @@ export const Navbar = () => {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden mt-2 p-3 rounded-2xl bg-[#121214] border border-white/10 text-xs space-y-1 shadow-2xl pointer-events-auto">
-          {DOCK_SHORTCUTS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.id}
-                to={item.to}
-                onClick={() => setMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  `flex items-center space-x-2.5 px-3 py-2 rounded-xl transition-colors ${
-                    isActive ? 'bg-white/10 text-white font-medium' : 'text-[#9E9E98] hover:text-[#E8E8E3]'
-                  }`
-                }
-              >
-                <Icon className={`w-4 h-4 ${item.color}`} />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
+        <div className="md:hidden border-t border-rule bg-vellum px-4 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            {BINDERY_TOOLS.slice(0, 8).map((tool) => {
+              const Icon = tool.icon;
+              return (
+                <Link
+                  key={tool.id}
+                  to={tool.to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2 p-2 rounded border border-rule bg-paper text-xs text-ink"
+                >
+                  <Icon className="w-3.5 h-3.5 text-ink-soft shrink-0" strokeWidth={1.5} />
+                  <span className="truncate">{tool.title}</span>
+                </Link>
+              );
+            })}
+          </div>
 
-          <div className="pt-2 mt-2 border-t border-white/10 flex flex-col space-y-1.5">
+          <div className="pt-3 border-t border-rule space-y-2">
+            <Link
+              to="/workspace"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-between p-2.5 rounded border border-rule bg-kraft/40 text-xs font-medium text-ink"
+            >
+              <div className="flex items-center gap-2">
+                <Archive className="w-4 h-4 text-ink" strokeWidth={1.5} />
+                <span>Cloud Vault & Canary Ledger</span>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 text-ink-soft" />
+            </Link>
+
             {isAuthenticated ? (
               <button
                 onClick={() => {
                   handleLogout();
                   setMobileMenuOpen(false);
                 }}
-                className="flex items-center justify-between w-full px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-950/20"
+                className="w-full flex items-center justify-between p-2.5 rounded border border-red/40 bg-red/10 text-xs text-red font-medium"
               >
                 <span>Sign Out ({user?.email})</span>
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-4 h-4" />
               </button>
             ) : (
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <Link
                   to="/login"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center py-2 rounded-xl border border-white/10 text-[#E8E8E3]"
+                  className="flex items-center justify-center py-2 rounded border border-rule bg-paper text-xs font-medium text-ink"
                 >
                   Sign in
                 </Link>
                 <Link
                   to="/register"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center justify-center py-2 rounded-xl bg-[#E8E8E3] text-[#111113] font-semibold"
+                  className="flex items-center justify-center py-2 rounded bg-red text-vellum text-xs font-medium shadow-ink-button"
                 >
                   Open Vault
                 </Link>
@@ -273,6 +379,4 @@ export const Navbar = () => {
       )}
     </header>
   );
-};
-
-export default Navbar;
+}
