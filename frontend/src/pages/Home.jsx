@@ -268,36 +268,35 @@ export default function Home() {
             - WORKSHOP BENCH chip removed entirely
            ========================================================================= */}
         <section className="pt-6 animate-fade-rise" style={{ animationDelay: '0ms' }}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-2 min-w-0 flex-1">
+          <div className="max-w-xl space-y-3">
+            <div className="flex items-start justify-between sm:justify-start gap-4">
               <h1 className="font-display text-[clamp(34px,9.5vw,40px)] tracking-tight leading-[1.04] text-ink">
                 Every PDF job, done at the <span className="italic text-red">bench</span>.
               </h1>
-
-              <p className="text-base text-ink-soft leading-snug max-w-xl">
-                Merge, split, compress and protect PDFs. No sign-in needed.
-              </p>
-
-              {/* Trust line: one single non-wrapping line, mono 11px uppercase */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic();
-                    setIsPrivacyOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-mono text-ink-soft hover:text-ink whitespace-nowrap active:scale-[0.98] transition-transform select-none focus:outline-none focus:ring-1 focus:ring-cyan rounded"
-                  title="View zero-retention guarantee"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-moss shrink-0" strokeWidth={1.5} />
-                  <span>FILES STAY IN MEMORY — NEVER STORED</span>
-                </button>
+              {/* Decorative 96px paper fan illustration aligned inside the headline content column */}
+              <div className="shrink-0 pt-0.5">
+                <PaperFanIllustration />
               </div>
             </div>
 
-            {/* Decorative 96px paper fan illustration */}
-            <div className="shrink-0 pt-1">
-              <PaperFanIllustration />
+            <p className="text-base text-ink-soft leading-snug">
+              Merge, split, compress and protect PDFs. No sign-in needed.
+            </p>
+
+            {/* Trust line: one single non-wrapping line, mono 11px uppercase */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic();
+                  setIsPrivacyOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-mono text-ink-soft hover:text-ink whitespace-nowrap active:scale-[0.98] transition-transform select-none focus:outline-none focus:ring-1 focus:ring-cyan rounded"
+                title="View zero-retention guarantee"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-moss shrink-0" strokeWidth={1.5} />
+                <span>FILES STAY IN MEMORY — NEVER STORED</span>
+              </button>
             </div>
           </div>
         </section>
@@ -340,28 +339,31 @@ export default function Home() {
                   <span>Choose PDF files</span>
                 </button>
 
-                {/* Full-width secondary outlined button "Scan with camera" */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic();
-                    cameraInputRef.current?.click();
-                  }}
-                  className="w-full h-11 flex items-center justify-center gap-2 rounded-[6px] border border-rule-strong bg-vellum hover:bg-kraft/50 active:bg-kraft/70 active:translate-y-0.5 text-ink font-medium text-xs transition-colors focus:outline-none focus:ring-2 focus:ring-cyan touch-target select-none"
-                >
-                  <Camera className="w-4 h-4 text-ink-soft" strokeWidth={1.5} />
-                  <span>Scan with camera</span>
-                </button>
+                {/* Coarse-pointer devices only (touch/mobile): Scan with camera & share copy */}
+                <div className="w-full flex flex-col items-center gap-3 pointer-coarse-only">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic();
+                      cameraInputRef.current?.click();
+                    }}
+                    className="w-full h-11 flex items-center justify-center gap-2 rounded-[6px] border border-rule-strong bg-vellum hover:bg-kraft/50 active:bg-kraft/70 active:translate-y-0.5 text-ink font-medium text-xs transition-colors focus:outline-none focus:ring-2 focus:ring-cyan touch-target select-none"
+                  >
+                    <Camera className="w-4 h-4 text-ink-soft" strokeWidth={1.5} />
+                    <span>Scan with camera</span>
+                  </button>
 
-                {/* Subtext line */}
-                <p className="font-mono text-xs text-ink-soft select-none text-center">
-                  or share a PDF to CloudPDF from any app
-                </p>
+                  <p className="font-mono text-xs text-ink-soft select-none text-center">
+                    or share a PDF to CloudPDF from any app
+                  </p>
+                </div>
 
-                {/* Desktop fine-pointer helper */}
-                <p className="hidden md:block font-mono text-[11px] text-ink-faint select-none text-center pt-0.5">
-                  (or drag & drop folios directly onto the workbench)
-                </p>
+                {/* Fine-pointer devices only (desktop): Drag & drop copy */}
+                <div className="w-full flex-col items-center pointer-fine-only">
+                  <p className="font-mono text-xs text-ink-soft select-none text-center py-1">
+                    or drag and drop PDF folios directly here
+                  </p>
+                </div>
               </div>
             </div>
           ) : (

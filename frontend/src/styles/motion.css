@@ -1,0 +1,336 @@
+/* ==========================================================================
+   THE BINDERY — CENTRALIZED MOTION TOKENS & KEYFRAMES
+   All animations animate transform & opacity only.
+   Respects prefers-reduced-motion and dev toggle ?motion=off.
+   ========================================================================== */
+
+:root {
+  --t-fast: 120ms;
+  --t-base: 200ms;
+  --t-slow: 320ms;
+  --t-stamp: 600ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Pointer media queries */
+.pointer-coarse-only {
+  display: flex;
+}
+.pointer-fine-only {
+  display: none;
+}
+
+@media (pointer: fine) {
+  .pointer-coarse-only {
+    display: none !important;
+  }
+  .pointer-fine-only {
+    display: flex !important;
+  }
+}
+
+@media (pointer: coarse) {
+  .pointer-fine-only {
+    display: none !important;
+  }
+  .pointer-coarse-only {
+    display: flex !important;
+  }
+}
+
+/* Dev toggle (?motion=off) & prefers-reduced-motion overrides */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --reduced-motion: 1;
+  }
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-motion="off"],
+html.motion-off {
+  --reduced-motion: 1;
+}
+
+html[data-motion="off"] *,
+html[data-motion="off"] ::before,
+html[data-motion="off"] ::after,
+html.motion-off *,
+html.motion-off ::before,
+html.motion-off ::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Underline draw for links */
+.ink-link-hover {
+  position: relative;
+  text-decoration: none;
+}
+.ink-link-hover::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 1px;
+  background-color: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--t-base) var(--ease-out);
+  pointer-events: none;
+}
+.ink-link-hover:hover::after,
+.ink-link-hover:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* Primary Button Light Sweep */
+.btn-sweep-container {
+  position: relative;
+  overflow: hidden;
+}
+.btn-sweep-container::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 40%;
+  height: 200%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 100%
+  );
+  transform: translateX(-150%) skewX(-20deg);
+  pointer-events: none;
+}
+@media (pointer: fine) {
+  .btn-sweep-container:hover::after {
+    animation: btn-light-sweep 600ms var(--ease-out) forwards;
+  }
+}
+
+@keyframes btn-light-sweep {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(450%) skewX(-20deg);
+    opacity: 0;
+  }
+}
+
+/* Button Active Press and Ripple */
+.bindery-press-btn {
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--t-fast) var(--ease-out), box-shadow var(--t-fast) var(--ease-out);
+}
+.bindery-press-btn:active {
+  transform: translateY(1px);
+}
+
+.ink-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(36, 27, 20, 0.25) 0%, rgba(36, 27, 20, 0.08) 60%, transparent 100%);
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0);
+  animation: ink-ripple-anim 400ms var(--ease-out) forwards;
+  z-index: 10;
+}
+
+@keyframes ink-ripple-anim {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3.5);
+    opacity: 0;
+  }
+}
+
+/* Keycap Press */
+.keycap-depress {
+  transition: transform var(--t-fast) var(--ease-out), box-shadow var(--t-fast) var(--ease-out);
+}
+.keycap-depressed {
+  transform: translateY(1px) !important;
+  box-shadow: 0 0 0 rgba(0,0,0,0) !important;
+}
+
+/* Marching Dashed Border */
+@keyframes marching-border {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: 24;
+  }
+}
+
+/* Drop Zone Thunk */
+@keyframes dropzone-thunk {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.99);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-thunk {
+  animation: dropzone-thunk var(--t-base) var(--ease-out);
+}
+
+/* Invalid File Shake */
+@keyframes invalid-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20%, 60% {
+    transform: translateX(-6px);
+  }
+  40%, 80% {
+    transform: translateX(6px);
+  }
+}
+.animate-invalid-shake {
+  animation: invalid-shake 300ms var(--ease-out);
+}
+
+/* Rubber Stamp Thump */
+@keyframes stamp-thump-bindery {
+  0% {
+    transform: scale(1.35) rotate(-6deg);
+    opacity: 0;
+    filter: blur(1px);
+  }
+  60% {
+    transform: scale(0.98) rotate(-6deg);
+    opacity: 1;
+    filter: blur(0.3px);
+  }
+  85% {
+    transform: scale(1.01) rotate(-6deg);
+  }
+  100% {
+    transform: scale(1) rotate(-6deg);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+.animate-stamp-bindery {
+  animation: stamp-thump-bindery var(--t-stamp) var(--ease-out) forwards;
+}
+
+/* Attention pulse for Download button (2 cycles only) */
+@keyframes attention-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(217, 68, 31, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(217, 68, 31, 0);
+  }
+}
+.attention-pulse-once {
+  animation: attention-pulse 1.2s var(--ease-out) 2;
+}
+
+/* Diagonal Window Light Drift */
+@keyframes window-light-drift {
+  0% {
+    transform: translate3d(-120%, -30%, 0) rotate(32deg);
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.85;
+  }
+  38% {
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate3d(140%, 30%, 0) rotate(32deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translate3d(140%, 30%, 0) rotate(32deg);
+    opacity: 0;
+  }
+}
+.window-light-band {
+  position: absolute;
+  top: -60%;
+  left: -20%;
+  width: 140vw;
+  height: 220vh;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 236, 190, 0.02) 20%,
+    rgba(255, 236, 190, 0.16) 50%,
+    rgba(255, 236, 190, 0.02) 80%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: window-light-drift 45s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+  will-change: transform, opacity;
+}
+
+/* Section Rule Line Scroll Reveal */
+.section-rule-line {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--t-slow) var(--ease-out);
+}
+.section-rule-line.is-revealed {
+  transform: scaleX(1);
+}
+
+/* Stagger reveal item */
+.stagger-reveal {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity var(--t-base) var(--ease-out), transform var(--t-base) var(--ease-out);
+}
+.stagger-reveal.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Tool tile corner peel fold */
+.tile-corner-fold {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 0 0;
+  border-color: transparent var(--paper) transparent transparent;
+  transition: border-width var(--t-base) var(--ease-out);
+  pointer-events: none;
+}
+@media (pointer: fine) {
+  .group:hover .tile-corner-fold,
+  .tool-card-bench:hover .tile-corner-fold {
+    border-width: 0 14px 14px 0;
+    box-shadow: -1px 1px 2px rgba(36, 27, 20, 0.08);
+  }
+}

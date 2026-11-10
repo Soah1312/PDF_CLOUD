@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
+import { initDevMotionToggle } from './utils/motion.js';
+
+// Initialize hidden dev motion toggle (?motion=off)
+initDevMotionToggle();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
