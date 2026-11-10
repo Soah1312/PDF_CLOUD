@@ -183,6 +183,57 @@ html.motion-off ::after {
   }
 }
 
+.animate-marching-border {
+  stroke-dasharray: 6 6;
+  animation: marching-border 1.2s linear infinite;
+}
+
+/* File card corner curl on hover */
+.file-corner-curl {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 0 0;
+  border-color: transparent var(--kraft) transparent transparent;
+  transition: border-width var(--t-fast) var(--ease-out);
+  pointer-events: none;
+  z-index: 5;
+}
+.group:hover .file-corner-curl {
+  border-width: 0 10px 10px 0;
+  filter: drop-shadow(-1px 1px 1px rgba(36, 27, 20, 0.15));
+}
+
+/* File card remove collapse */
+.file-card-collapsing {
+  transform: scale(0.95) !important;
+  opacity: 0 !important;
+  max-height: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+  transition: transform 200ms var(--ease-out), opacity 200ms var(--ease-out), max-height 200ms var(--ease-out), padding 200ms var(--ease-out), margin 200ms var(--ease-out) !important;
+}
+
+/* Paper strip upload progress bar */
+.paper-progress-strip {
+  position: relative;
+  height: 4px;
+  background-color: var(--kraft);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.paper-progress-fill {
+  height: 100%;
+  background-color: var(--red);
+  transition: width 150ms var(--ease-out);
+}
+
 /* Drop Zone Thunk */
 @keyframes dropzone-thunk {
   0% {

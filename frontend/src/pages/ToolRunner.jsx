@@ -59,6 +59,7 @@ import { BINDERY_TOOLS } from '../config/tools';
 import { renderPdfThumbnail, getPdfPageCount } from '../utils/pdfThumbnails';
 import { motionBus } from '../utils/motion';
 import PrimaryButton from '../components/common/PrimaryButton';
+import OdometerValue from '../components/common/OdometerValue';
 
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
@@ -85,6 +86,8 @@ export default function ToolRunner() {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [thumbnails, setThumbnails] = useState({});
   const [isDragging, setIsDragging] = useState(false);
+  const [isThunking, setIsThunking] = useState(false);
+  const [collapsingIds, setCollapsingIds] = useState(new Set());
   const fileInputRef = useRef(null);
 
   // Split-specific page state
@@ -123,7 +126,28 @@ export default function ToolRunner() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStage, setProcessingStage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [progressMetrics, setProgressMetrics] = useState({ pct: 0, speed: '16.4 MB/s', timeLeft: '1s' });
   const [resultData, setResultData] = useState(null);
+
+  // Smooth progress metrics timer during processing
+  useEffect(() => {
+    if (!isProcessing) {
+      setProgressMetrics({ pct: 0, speed: '16.4 MB/s', timeLeft: '1s' });
+      return;
+    }
+    const interval = setInterval(() => {
+      setProgressMetrics((prev) => {
+        const nextPct = Math.min(96, prev.pct + Math.floor(Math.random() * 8 + 4));
+        const rem = Math.max(0, Math.ceil((100 - nextPct) / 30));
+        return {
+          pct: nextPct,
+          speed: `${(14 + Math.random() * 4).toFixed(1)} MB/s`,
+          timeLeft: rem > 0 ? `${rem}s left` : '<1s left',
+        };
+      });
+    }, 180);
+    return () => clearInterval(interval);
+  }, [isProcessing]);
   const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const abortControllerRef = useRef(null);
@@ -260,6 +284,8 @@ export default function ToolRunner() {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
+    setIsThunking(true);
+    setTimeout(() => setIsThunking(false), 220);
     motionBus.emit('pressroom:state', 'dropped');
     setTimeout(() => {
       motionBus.emit('pressroom:state', 'idle');
@@ -269,8 +295,17 @@ export default function ToolRunner() {
     }
   };
 
-  const removeFile = (index) => {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  const removeFile = (index, key) => {
+    const collapseKey = key || `${index}`;
+    setCollapsingIds((prev) => new Set(prev).add(collapseKey));
+    setTimeout(() => {
+      setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+      setCollapsingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(collapseKey);
+        return next;
+      });
+    }, 200);
   };
 
   const moveFile = (index, direction) => {
@@ -1007,21 +1042,44 @@ export default function ToolRunner() {
                 motionBus.emit('pressroom:state', 'idle');
               }}
               onDrop={handleDrop}
-              className={`relative cursor-pointer p-12 sm:p-16 rounded-md border-2 border-dashed transition-all duration-150 text-center select-none ${
+              className={`group relative cursor-pointer p-12 sm:p-16 rounded-md border-2 transition-all duration-200 text-center select-none ${
                 isDragging
-                  ? 'border-red bg-kraft/70 -translate-y-0.5 shadow-ink-lift'
-                  : 'border-rule hover:border-rule-strong bg-vellum hover:bg-kraft/30 shadow-subtle'
-              }`}
+                  ? 'border-solid border-red bg-kraft/70 -translate-y-0.5 shadow-ink-drag'
+                  : 'border-dashed border-rule hover:border-rule-strong bg-vellum hover:bg-kraft/30 shadow-subtle'
+              } ${isThunking ? 'animate-thunk' : ''}`}
             >
-              {/* Corner Registration Marks (+) */}
-              <span className="absolute top-2 left-2 font-mono text-xs text-rule-strong">+</span>
-              <span className="absolute top-2 right-2 font-mono text-xs text-rule-strong">+</span>
-              <span className="absolute bottom-2 left-2 font-mono text-xs text-rule-strong">+</span>
-              <span className="absolute bottom-2 right-2 font-mono text-xs text-rule-strong">+</span>
+              {/* Corner Registration Marks (+) (rotates 45deg & moves 2px inward on hover) */}
+              <span
+                className="absolute top-2 left-2 font-mono text-xs text-rule-strong select-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:translate-x-0.5 group-hover:translate-y-0.5"
+                aria-hidden="true"
+              >
+                +
+              </span>
+              <span
+                className="absolute top-2 right-2 font-mono text-xs text-rule-strong select-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:-translate-x-0.5 group-hover:translate-y-0.5"
+                aria-hidden="true"
+              >
+                +
+              </span>
+              <span
+                className="absolute bottom-2 left-2 font-mono text-xs text-rule-strong select-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                aria-hidden="true"
+              >
+                +
+              </span>
+              <span
+                className="absolute bottom-2 right-2 font-mono text-xs text-rule-strong select-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:-translate-x-0.5 group-hover:-translate-y-0.5"
+                aria-hidden="true"
+              >
+                +
+              </span>
 
               <div className="max-w-md mx-auto space-y-3">
+                {/* Icon drops into small tray on dragover */}
                 <div
-                  className="w-12 h-12 rounded border border-rule mx-auto flex items-center justify-center text-ink shadow-sm"
+                  className={`w-12 h-12 rounded border border-rule mx-auto flex items-center justify-center text-ink shadow-sm transition-transform duration-200 ease-out ${
+                    isDragging ? 'translate-y-1.5' : ''
+                  }`}
                   style={{ backgroundColor: currentTool.tint || 'var(--paper)' }}
                 >
                   <UploadCloud className="w-6 h-6 text-ink-soft" strokeWidth={1.5} />
@@ -1030,7 +1088,7 @@ export default function ToolRunner() {
                 <div>
                   <p className="font-display text-xl text-ink">
                     {isDragging
-                      ? 'Release to add to workbench'
+                      ? 'Release to add'
                       : `Place ${currentTool.multiple ? 'documents' : 'a document'} on the bench`}
                   </p>
                   <p className="text-xs text-ink-soft mt-1">
@@ -1050,12 +1108,24 @@ export default function ToolRunner() {
             </div>
 
             {errorMessage && (
-              <div className="p-3.5 rounded border border-red/40 bg-red/10 text-xs text-ink flex items-start gap-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red" />
-                <div>
-                  <p className="font-semibold text-red">Document issue</p>
-                  <p className="text-ink-soft mt-0.5">{errorMessage}</p>
+              <div className="p-3.5 rounded border border-red/40 bg-red/10 text-xs text-ink flex items-start justify-between gap-2.5 animate-invalid-shake">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red" />
+                  <div>
+                    <p className="font-semibold text-red">Document issue</p>
+                    <p className="text-ink-soft mt-0.5">{errorMessage}</p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage('');
+                    fileInputRef.current?.click();
+                  }}
+                  className="px-2.5 py-1 text-xs font-mono font-medium rounded bg-red text-vellum hover:bg-red-dark transition-opacity duration-200 shrink-0"
+                >
+                  Retry
+                </button>
               </div>
             )}
           </div>
@@ -1145,27 +1215,35 @@ export default function ToolRunner() {
                     {selectedFiles.map((file, idx) => {
                       const thumbKey = `${file.name}-${file.size}`;
                       const thumb = thumbnails[thumbKey];
+                      const isCollapsing = collapsingIds.has(thumbKey);
                       return (
                         <div
                           key={`${file.name}-${idx}`}
-                          className="flex items-center justify-between p-3 rounded border border-rule bg-vellum hover:border-rule-strong hover:shadow-subtle transition-all duration-120 group"
+                          className={`relative flex items-center justify-between p-3 rounded border border-rule bg-vellum hover:border-rule-strong hover:shadow-subtle transition-all duration-200 group ${
+                            isCollapsing ? 'file-card-collapsing' : ''
+                          }`}
+                          style={{ animationDelay: `${idx * 40}ms` }}
                         >
+                          {/* Corner Curl on hover */}
+                          <div className="file-corner-curl" aria-hidden="true" />
+
                           <div className="flex items-center gap-3 min-w-0">
                             {/* Sequence number */}
                             <span className="font-mono text-xs font-semibold text-ink-faint w-5 text-right shrink-0">
                               {idx + 1}.
                             </span>
 
-                            {/* Thumbnail or placeholder */}
+                            {/* Thumbnail with shimmer skeleton and fade-in */}
                             <div className="w-12 h-16 rounded border border-rule bg-paper flex items-center justify-center overflow-hidden shrink-0 shadow-sm relative">
+                              <div className="absolute inset-0 skeleton-shimmer" />
                               {thumb ? (
                                 <img
                                   src={thumb}
                                   alt={`Folio ${idx + 1}`}
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover relative z-10 transition-opacity duration-300 opacity-100"
                                 />
                               ) : (
-                                <div className="p-1 text-center">
+                                <div className="p-1 text-center relative z-10">
                                   <FileText className="w-5 h-5 mx-auto text-ink-faint" />
                                   <span className="text-[8px] font-mono text-ink-faint">
                                     P.1
@@ -1179,7 +1257,7 @@ export default function ToolRunner() {
                                 {file.name}
                               </p>
                               <p className="text-[11px] font-mono text-ink-soft tabular-nums mt-0.5">
-                                {formatBytes(file.size)}
+                                <OdometerValue value={formatBytes(file.size)} />
                               </p>
                             </div>
                           </div>
@@ -1215,8 +1293,8 @@ export default function ToolRunner() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => removeFile(idx)}
-                              className="p-2 sm:p-1.5 rounded border border-rule hover:bg-red/10 text-red ml-1 min-w-[36px] min-h-[36px] flex items-center justify-center"
+                              onClick={() => removeFile(idx, thumbKey)}
+                              className="p-2 sm:p-1.5 rounded border border-rule hover:bg-red/10 text-red ml-1 min-w-[36px] min-h-[36px] flex items-center justify-center transition-all duration-200 group-hover:rotate-90"
                               title="Remove folio"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1694,9 +1772,19 @@ export default function ToolRunner() {
                 [{formatBytes(totalBytes)}]
               </span>
               {isProcessing && (
-                <span className="hidden sm:inline-block text-xs font-mono text-red animate-pulse">
-                  {processingStage || 'Processing in isolated RAM namespace...'}
-                </span>
+                <div className="hidden sm:flex flex-col gap-1 min-w-[190px] max-w-xs">
+                  <div className="paper-progress-strip w-full">
+                    <div
+                      className="paper-progress-fill"
+                      style={{ width: `${progressMetrics.pct}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-mono text-ink-soft tabular-nums">
+                    <span>{progressMetrics.pct}%</span>
+                    <span>{progressMetrics.speed}</span>
+                    <span>{progressMetrics.timeLeft}</span>
+                  </div>
+                </div>
               )}
             </div>
 

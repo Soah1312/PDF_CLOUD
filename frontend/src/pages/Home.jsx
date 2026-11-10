@@ -14,6 +14,7 @@ import { BINDERY_TOOLS, TOOL_CATEGORIES } from '../config/tools';
 import ToolCard from '../components/common/ToolCard';
 import PrivacyBottomSheet from '../components/common/PrivacyBottomSheet';
 import PrimaryButton from '../components/common/PrimaryButton';
+import OdometerValue from '../components/common/OdometerValue';
 import { motionBus } from '../utils/motion';
 
 function formatBytes(bytes) {
@@ -111,6 +112,8 @@ export default function Home() {
   // Dropped file inspection state
   const [droppedFiles, setDroppedFiles] = useState([]);
   const [fileAnalysis, setFileAnalysis] = useState(null);
+  const [fileError, setFileError] = useState('');
+  const [isThunking, setIsThunking] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -148,6 +151,30 @@ export default function Home() {
   const handleFilesChosen = async (filesList) => {
     const files = Array.from(filesList);
     if (!files.length) return;
+    setFileError('');
+
+    // Validate: max file size (100 MB)
+    for (const f of files) {
+      if (f.size > 100 * 1024 * 1024) {
+        setFileError(`Document "${f.name}" exceeds 100 MB limit (${formatBytes(f.size)}).`);
+        motionBus.emit('pressroom:state', 'error');
+        setTimeout(() => motionBus.emit('pressroom:state', 'idle'), 400);
+        return;
+      }
+    }
+
+    // Validate supported formats (.pdf, images, .docx)
+    const isValid = files.every((f) => {
+      const name = f.name.toLowerCase();
+      return name.endsWith('.pdf') || f.type === 'application/pdf' || f.type.startsWith('image/') || name.endsWith('.docx');
+    });
+
+    if (!isValid) {
+      setFileError('Unsupported document format. Please place PDF or image files on the bench.');
+      motionBus.emit('pressroom:state', 'error');
+      setTimeout(() => motionBus.emit('pressroom:state', 'idle'), 400);
+      return;
+    }
 
     setDroppedFiles(files);
     motionBus.emit('pressroom:state', 'dropped');
@@ -229,6 +256,7 @@ export default function Home() {
   const resetDroppedFiles = () => {
     setDroppedFiles([]);
     setFileAnalysis(null);
+    setFileError('');
     motionBus.emit('pressroom:state', 'idle');
   };
 
@@ -251,6 +279,8 @@ export default function Home() {
       onDrop={(e) => {
         e.preventDefault();
         setIsDragging(false);
+        setIsThunking(true);
+        setTimeout(() => setIsThunking(false), 220);
         motionBus.emit('pressroom:state', 'dropped');
         setTimeout(() => {
           motionBus.emit('pressroom:state', 'idle');
@@ -333,31 +363,78 @@ export default function Home() {
             - NO drag-and-drop wording on touch devices
            ========================================================================= */}
         <section className="animate-fade-rise" style={{ animationDelay: '60ms' }}>
+          {fileError && (
+            <div className="mb-3 p-3.5 rounded-[6px] border border-red/40 bg-red/10 text-xs text-ink flex items-start gap-2.5 animate-invalid-shake">
+              <span className="font-mono text-red font-bold">!</span>
+              <div className="flex-1">
+                <p className="font-semibold text-red">Document issue</p>
+                <p className="text-ink-soft mt-0.5">{fileError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFileError('')}
+                className="text-ink-soft hover:text-ink text-xs font-mono"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {!fileAnalysis ? (
             <div
-              className={`relative p-5 rounded-[6px] border border-rule bg-vellum transition-all duration-150 shadow-[0_1px_3px_rgba(36,27,20,0.04)] ${
-                isDragging ? 'bg-kraft/50 border-red' : ''
-              }`}
+              className={`group relative p-5 rounded-[6px] border transition-all duration-200 shadow-[0_1px_3px_rgba(36,27,20,0.04)] ${
+                isDragging
+                  ? 'bg-kraft/70 border-red -translate-y-0.5 shadow-ink-drag'
+                  : 'bg-vellum border-rule hover:border-rule-strong hover:shadow-subtle'
+              } ${isThunking ? 'animate-thunk' : ''}`}
             >
-              {/* Registration "+" marks in four corners */}
-              <span className="absolute top-2 left-2 font-mono text-xs text-rule-strong select-none leading-none" aria-hidden="true">+</span>
-              <span className="absolute top-2 right-2 font-mono text-xs text-rule-strong select-none leading-none" aria-hidden="true">+</span>
-              <span className="absolute bottom-2 left-2 font-mono text-xs text-rule-strong select-none leading-none" aria-hidden="true">+</span>
-              <span className="absolute bottom-2 right-2 font-mono text-xs text-rule-strong select-none leading-none" aria-hidden="true">+</span>
+              {/* Registration "+" marks in four corners (rotates 45deg & moves 2px inward on hover) */}
+              <span
+                className="absolute top-2 left-2 font-mono text-xs text-rule-strong select-none leading-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:translate-x-0.5 group-hover:translate-y-0.5"
+                aria-hidden="true"
+              >
+                +
+              </span>
+              <span
+                className="absolute top-2 right-2 font-mono text-xs text-rule-strong select-none leading-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:-translate-x-0.5 group-hover:translate-y-0.5"
+                aria-hidden="true"
+              >
+                +
+              </span>
+              <span
+                className="absolute bottom-2 left-2 font-mono text-xs text-rule-strong select-none leading-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                aria-hidden="true"
+              >
+                +
+              </span>
+              <span
+                className="absolute bottom-2 right-2 font-mono text-xs text-rule-strong select-none leading-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:-translate-x-0.5 group-hover:-translate-y-0.5"
+                aria-hidden="true"
+              >
+                +
+              </span>
 
-              {/* Dashed inner border wrapper */}
-              <div className="border border-dashed border-rule-strong rounded-[4px] p-4 sm:p-5 flex flex-col items-center gap-3">
-                {/* Full-width primary button (56px tall, red, upload icon, offset ink shadow) */}
-                <PrimaryButton
-                  onClick={() => {
-                    triggerHaptic();
-                    fileInputRef.current?.click();
-                  }}
-                  className="w-full h-14"
-                  icon={UploadCloud}
-                >
-                  Choose PDF files
-                </PrimaryButton>
+              {/* Dashed inner border wrapper with marching effect on hover */}
+              <div
+                className={`border rounded-[4px] p-4 sm:p-5 flex flex-col items-center gap-3 transition-all duration-200 ${
+                  isDragging
+                    ? 'border-solid border-red bg-kraft/40'
+                    : 'border-dashed border-rule-strong group-hover:border-ink-soft animate-marching-border'
+                }`}
+              >
+                {/* Full-width primary button (56px tall, drops into small tray on dragover) */}
+                <div className={`w-full transition-transform duration-200 ease-out ${isDragging ? 'translate-y-1.5' : ''}`}>
+                  <PrimaryButton
+                    onClick={() => {
+                      triggerHaptic();
+                      fileInputRef.current?.click();
+                    }}
+                    className="w-full h-14"
+                    icon={UploadCloud}
+                  >
+                    {isDragging ? 'Release to add' : 'Choose PDF files'}
+                  </PrimaryButton>
+                </div>
 
                 {/* Coarse-pointer devices only (touch/mobile): Scan with camera & share copy */}
                 <div className="w-full flex flex-col items-center gap-3 pointer-coarse-only">
@@ -381,7 +458,7 @@ export default function Home() {
                 {/* Fine-pointer devices only (desktop): Drag & drop copy */}
                 <div className="w-full flex-col items-center pointer-fine-only">
                   <p className="font-mono text-xs text-ink-soft select-none text-center py-1">
-                    or drag and drop PDF folios directly here
+                    {isDragging ? 'Release folios onto the bench' : 'or drag and drop PDF folios directly here'}
                   </p>
                 </div>
               </div>
@@ -402,11 +479,11 @@ export default function Home() {
                     </h2>
                     <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-ink-soft mt-0.5">
                       <span className="tabular-nums">
-                        {formatBytes(fileAnalysis.size || fileAnalysis.totalSize)}
+                        <OdometerValue value={formatBytes(fileAnalysis.size || fileAnalysis.totalSize)} />
                       </span>
                       {fileAnalysis.pageCount && (
                         <span className="tabular-nums">
-                          • ~{fileAnalysis.pageCount} pages
+                          • ~<OdometerValue value={fileAnalysis.pageCount} /> pages
                         </span>
                       )}
                       {fileAnalysis.isEncrypted && (
