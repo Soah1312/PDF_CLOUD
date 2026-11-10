@@ -151,17 +151,19 @@ export default function CommandPalette({ isOpen, onClose }) {
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
-        {/* Search Input Bar (Touch friendly min 44px) */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-rule bg-paper/80 shrink-0">
+        {/* Search Input Bar (Touch friendly min 44px, widens ~6% on focus with cyan focus ring) */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-rule bg-paper/80 shrink-0">
           <Search className="w-5 h-5 text-ink-soft shrink-0" strokeWidth={1.5} />
-          <input
-            ref={inputRef}
-            type="text"
-            className="flex-1 bg-transparent text-base sm:text-sm text-ink placeholder:text-ink-faint focus:outline-none"
-            placeholder="Search bench tools or actions..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <div className="flex-1 transition-all duration-200 focus-within:w-[106%]">
+            <input
+              ref={inputRef}
+              type="text"
+              className="w-full bg-transparent text-base sm:text-sm text-ink placeholder:text-ink-faint rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-cyan transition-all duration-150"
+              placeholder="Search bench tools or actions..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
           {query && (
             <button
               onClick={() => setQuery('')}

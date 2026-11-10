@@ -21,9 +21,30 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
 
   const [toolsOpen, setToolsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [isCtrlKDepressed, setIsCtrlKDepressed] = useState(false);
 
   const toolsDropdownRef = useRef(null);
   const privacyRef = useRef(null);
+
+  // Ctrl+K keycap depression listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        setIsCtrlKDepressed(true);
+      }
+    };
+    const handleKeyUp = (e) => {
+      if (e.key.toLowerCase() === 'k' || e.key === 'Control' || e.key === 'Meta') {
+        setIsCtrlKDepressed(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -160,7 +181,7 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
                   <Link
                     to="/workflows"
                     onClick={() => setToolsOpen(false)}
-                    className="hover:text-ink underline decoration-rule-strong"
+                    className="ink-link-hover hover:text-ink decoration-rule-strong"
                   >
                     Open Pipeline Studio →
                   </Link>
@@ -225,16 +246,20 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
         </div>
 
         {/* Center: Command Palette Trigger on Desktop */}
-        <div className="hidden md:flex items-center flex-1 max-w-xs mx-4">
+        <div className="hidden md:flex items-center flex-1 max-w-xs mx-4 transition-all duration-200 focus-within:max-w-[340px]">
           <button
             onClick={onOpenCommandPalette}
-            className="w-full flex items-center justify-between px-3 py-1.5 rounded border border-rule bg-paper hover:bg-kraft/50 text-ink-soft hover:text-ink text-xs transition-colors"
+            className="w-full flex items-center justify-between px-3 py-1.5 rounded border border-rule bg-paper hover:bg-kraft/50 text-ink-soft hover:text-ink text-xs transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan focus:w-[106%]"
           >
             <div className="flex items-center gap-2">
               <Search className="w-3.5 h-3.5 text-ink-faint" strokeWidth={1.5} />
               <span>Search bench tools...</span>
             </div>
-            <kbd className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono tracking-mono text-ink-soft bg-vellum border border-rule rounded">
+            <kbd
+              className={`keycap-depress inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono tracking-mono text-ink-soft bg-vellum border border-rule rounded shadow-xs ${
+                isCtrlKDepressed ? 'keycap-depressed' : ''
+              }`}
+            >
               Ctrl K
             </kbd>
           </button>
@@ -295,16 +320,16 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
               </button>
             </div>
           ) : (
-            <div className="hidden md:flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-3">
               <Link
                 to="/login"
-                className="px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:text-ink transition-colors"
+                className="ink-link-hover px-1 py-1 text-xs font-medium text-ink-soft hover:text-ink transition-colors"
               >
                 Sign in
               </Link>
               <Link
                 to="/register"
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded bg-red text-vellum font-medium text-xs hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px"
+                className="btn-sweep-container bindery-press-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-red text-vellum font-medium text-xs hover:bg-red-dark transition-all duration-120 shadow-[0_2px_0_#982c12] active:translate-y-px"
               >
                 <span>Open Vault</span>
                 <ArrowRight className="w-3 h-3" strokeWidth={2} />

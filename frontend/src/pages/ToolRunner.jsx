@@ -58,6 +58,7 @@ import {
 import { BINDERY_TOOLS } from '../config/tools';
 import { renderPdfThumbnail, getPdfPageCount } from '../utils/pdfThumbnails';
 import { motionBus } from '../utils/motion';
+import PrimaryButton from '../components/common/PrimaryButton';
 
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
@@ -1710,24 +1711,14 @@ export default function ToolRunner() {
                 </button>
               )}
 
-              <button
-                type="button"
+              <PrimaryButton
                 onClick={handleExecute}
-                disabled={isProcessing}
-                className="px-5 sm:px-6 py-2.5 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px flex items-center justify-center gap-2 disabled:opacity-50 min-h-[44px]"
+                loading={isProcessing}
+                loadingText="Binding folios..."
+                className="px-5 sm:px-6 min-h-[44px]"
               >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Executing...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>{currentTool.actionBtn || `Execute ${currentTool.title}`}</span>
-                    <ArrowRight className="w-3.5 h-3.5 stroke-[2]" />
-                  </>
-                )}
-              </button>
+                <span>{currentTool.actionBtn || `Execute ${currentTool.title}`}</span>
+              </PrimaryButton>
             </div>
           </div>
         </div>

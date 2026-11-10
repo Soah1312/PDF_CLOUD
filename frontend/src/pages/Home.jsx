@@ -13,6 +13,7 @@ import {
 import { BINDERY_TOOLS, TOOL_CATEGORIES } from '../config/tools';
 import ToolCard from '../components/common/ToolCard';
 import PrivacyBottomSheet from '../components/common/PrivacyBottomSheet';
+import PrimaryButton from '../components/common/PrimaryButton';
 import { motionBus } from '../utils/motion';
 
 function formatBytes(bytes) {
@@ -347,17 +348,16 @@ export default function Home() {
               {/* Dashed inner border wrapper */}
               <div className="border border-dashed border-rule-strong rounded-[4px] p-4 sm:p-5 flex flex-col items-center gap-3">
                 {/* Full-width primary button (56px tall, red, upload icon, offset ink shadow) */}
-                <button
-                  type="button"
+                <PrimaryButton
                   onClick={() => {
                     triggerHaptic();
                     fileInputRef.current?.click();
                   }}
-                  className="w-full h-14 flex items-center justify-center gap-2.5 rounded-[6px] bg-red text-white font-medium text-sm transition-all duration-100 shadow-[0_2px_0_#982c12] active:translate-y-0.5 active:shadow-none focus:outline-none focus:ring-2 focus:ring-cyan touch-target select-none"
+                  className="w-full h-14"
+                  icon={UploadCloud}
                 >
-                  <UploadCloud className="w-5 h-5 text-white" strokeWidth={1.5} />
-                  <span>Choose PDF files</span>
-                </button>
+                  Choose PDF files
+                </PrimaryButton>
 
                 {/* Coarse-pointer devices only (touch/mobile): Scan with camera & share copy */}
                 <div className="w-full flex flex-col items-center gap-3 pointer-coarse-only">
