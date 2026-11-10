@@ -7,6 +7,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import CommandPalette from './components/common/CommandPalette';
 import MobileBottomNav from './components/layout/MobileBottomNav';
 import ToolsBottomSheet from './components/common/ToolsBottomSheet';
+import ToastContainer from './components/common/ToastContainer';
 import pressRoom from './background/pressroom';
 
 // Pages
@@ -107,6 +108,9 @@ function AppContent() {
 
       {/* Desktop Footer */}
       <Footer />
+
+      {/* Floating Paper-Slip Toast Notifications */}
+      <ToastContainer />
 
       {/* Fixed Mobile Bottom Tab Bar (Home, Tools, Search, Vault, Account) */}
       <MobileBottomNav

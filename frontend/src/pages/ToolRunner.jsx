@@ -60,6 +60,7 @@ import { renderPdfThumbnail, getPdfPageCount } from '../utils/pdfThumbnails';
 import { motionBus } from '../utils/motion';
 import PrimaryButton from '../components/common/PrimaryButton';
 import OdometerValue from '../components/common/OdometerValue';
+import { updateTabProgress, restoreTabProgress } from '../utils/tabProgress';
 
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
@@ -129,15 +130,17 @@ export default function ToolRunner() {
   const [progressMetrics, setProgressMetrics] = useState({ pct: 0, speed: '16.4 MB/s', timeLeft: '1s' });
   const [resultData, setResultData] = useState(null);
 
-  // Smooth progress metrics timer during processing
+  // Smooth progress metrics timer and tab title/favicon update during processing
   useEffect(() => {
     if (!isProcessing) {
+      restoreTabProgress();
       setProgressMetrics({ pct: 0, speed: '16.4 MB/s', timeLeft: '1s' });
       return;
     }
     const interval = setInterval(() => {
       setProgressMetrics((prev) => {
         const nextPct = Math.min(96, prev.pct + Math.floor(Math.random() * 8 + 4));
+        updateTabProgress(nextPct);
         const rem = Math.max(0, Math.ceil((100 - nextPct) / 30));
         return {
           pct: nextPct,
@@ -146,7 +149,10 @@ export default function ToolRunner() {
         };
       });
     }, 180);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      restoreTabProgress();
+    };
   }, [isProcessing]);
   const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -1586,12 +1592,20 @@ export default function ToolRunner() {
             <div className="p-8 rounded-md border border-rule bg-vellum shadow-ink-lift text-center space-y-6 relative overflow-hidden">
               {/* Rubber Stamp Thump Motif in top right */}
               <div className="absolute top-4 right-6 pointer-events-none select-none">
-                <div className="animate-stamp border-2 border-moss px-3 py-1 rounded text-moss font-mono text-xs font-bold tracking-mono uppercase transform -rotate-6">
-                  {currentTool.id === 'verify-canary'
-                    ? resultData.status
-                    : currentTool.id === 'protect'
-                    ? 'SEALED'
-                    : 'DONE'}
+                <div className="relative">
+                  <div className="animate-stamp-bindery border-2 border-moss px-3.5 py-1.5 rounded text-moss font-mono text-xs font-bold tracking-mono uppercase transform -rotate-6 shadow-xs">
+                    {currentTool.id === 'verify-canary'
+                      ? resultData.status
+                      : currentTool.id === 'protect'
+                      ? 'SEALED'
+                      : currentTool.id === 'merge'
+                      ? 'MERGED'
+                      : 'DONE'}
+                  </div>
+                  <span
+                    className="absolute inset-0 rounded border-2 border-moss opacity-35 animate-ping pointer-events-none"
+                    style={{ animationDuration: '650ms', animationIterationCount: 1 }}
+                  />
                 </div>
               </div>
 
@@ -1623,7 +1637,7 @@ export default function ToolRunner() {
                   <div className="flex justify-between items-center border-t border-rule/60 pt-2">
                     <span className="text-ink-soft">Final Size:</span>
                     <span className="text-moss font-semibold tabular-nums">
-                      {formatBytes(resultData.output_file_size_bytes)}
+                      <OdometerValue value={formatBytes(resultData.output_file_size_bytes)} />
                     </span>
                   </div>
                 )}
@@ -1633,7 +1647,7 @@ export default function ToolRunner() {
                     <div className="flex justify-between text-ink-soft">
                       <span>Space Saved:</span>
                       <span className="text-moss font-semibold tabular-nums">
-                        {resultData.stats.compression_ratio_pct}%
+                        <OdometerValue value={resultData.stats.compression_ratio_pct} />%
                       </span>
                     </div>
                     {/* Fill bar */}
@@ -1672,7 +1686,7 @@ export default function ToolRunner() {
                   <a
                     href={resultData.download_url}
                     download={resultData.output_filename || 'document.pdf'}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-ink-button active:translate-y-px min-h-[44px]"
+                    className="btn-sweep-container bindery-press-btn attention-pulse-once inline-flex items-center gap-2 px-6 py-2.5 rounded bg-red text-vellum font-semibold text-xs tracking-tight hover:bg-red-dark transition-all duration-120 shadow-[0_2px_0_#982c12] active:translate-y-px min-h-[44px]"
                   >
                     <Download className="w-4 h-4" strokeWidth={2} />
                     <span>Download Folio</span>

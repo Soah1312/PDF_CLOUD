@@ -15,7 +15,7 @@ import ToolCard from '../components/common/ToolCard';
 import PrivacyBottomSheet from '../components/common/PrivacyBottomSheet';
 import PrimaryButton from '../components/common/PrimaryButton';
 import OdometerValue from '../components/common/OdometerValue';
-import { motionBus } from '../utils/motion';
+import { motionBus, initScrollReveals } from '../utils/motion';
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -140,6 +140,14 @@ export default function Home() {
 
     return matchesCategory && matchesSearch;
   });
+
+  // Scroll reveals for section hairline rules and stagger items
+  useEffect(() => {
+    const cleanup = initScrollReveals();
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [filteredRemainingTools]);
 
   const triggerHaptic = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -533,7 +541,7 @@ export default function Home() {
             <span className="font-mono text-[11px] uppercase tracking-mono text-ink-faint font-semibold">
               01 — TOOLS
             </span>
-            <div className="h-px flex-1 bg-rule" />
+            <div className="h-px flex-1 bg-rule section-rule-line" />
           </div>
 
           {/* =========================================================================
@@ -543,17 +551,22 @@ export default function Home() {
                 mono sub-tag, one-line 13px description, tap = :active press-down
              ========================================================================= */}
           <div className="grid grid-cols-2 gap-3">
-            {featuredTools.map((tool) => (
-              <ToolCard
+            {featuredTools.map((tool, idx) => (
+              <div
                 key={tool.id}
-                variant="tile"
-                tool={tool}
-                onClick={() => {
-                  if (droppedFiles.length) {
-                    routeWithFiles(tool.to);
-                  }
-                }}
-              />
+                className="stagger-reveal"
+                style={{ transitionDelay: `${idx * 50}ms` }}
+              >
+                <ToolCard
+                  variant="tile"
+                  tool={tool}
+                  onClick={() => {
+                    if (droppedFiles.length) {
+                      routeWithFiles(tool.to);
+                    }
+                  }}
+                />
+              </div>
             ))}
           </div>
         </section>
@@ -566,7 +579,7 @@ export default function Home() {
             <span className="font-mono text-[11px] uppercase tracking-mono text-ink-faint font-semibold">
               02 — MORE TOOLS
             </span>
-            <div className="h-px flex-1 bg-rule" />
+            <div className="h-px flex-1 bg-rule section-rule-line" />
           </div>
 
           {/* Search Box + Clean Wrapping Filter Chips */}
@@ -603,19 +616,24 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Table of contents style list (56px rows) */}
+          {/* Table of contents style list (56px rows) with stagger-reveal */}
           <div className="space-y-2 pt-1">
-            {filteredRemainingTools.map((tool) => (
-              <ToolCard
+            {filteredRemainingTools.map((tool, idx) => (
+              <div
                 key={tool.id}
-                variant="toc"
-                tool={tool}
-                onClick={() => {
-                  if (droppedFiles.length) {
-                    routeWithFiles(tool.to);
-                  }
-                }}
-              />
+                className="stagger-reveal"
+                style={{ transitionDelay: `${idx * 40}ms` }}
+              >
+                <ToolCard
+                  variant="toc"
+                  tool={tool}
+                  onClick={() => {
+                    if (droppedFiles.length) {
+                      routeWithFiles(tool.to);
+                    }
+                  }}
+                />
+              </div>
             ))}
           </div>
         </section>
