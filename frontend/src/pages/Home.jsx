@@ -328,13 +328,13 @@ export default function Home() {
             - WORKSHOP BENCH chip removed entirely
            ========================================================================= */}
         <section className="pt-6 animate-fade-rise" style={{ animationDelay: '0ms' }}>
-          <div className="max-w-xl space-y-3">
+          <div className="max-w-3xl space-y-3">
             <div className="flex items-start justify-between sm:justify-start gap-4">
-              <h1 className="font-display text-[clamp(34px,9.5vw,40px)] tracking-tight leading-[1.04] text-ink">
+              <h1 className="font-display text-[clamp(21px,3.8vw,40px)] tracking-tight leading-[1.08] text-ink whitespace-nowrap">
                 Every PDF job, done at the <span className="italic text-red">bench</span>.
               </h1>
               {/* Decorative 96px paper fan illustration aligned inside the headline content column */}
-              <div className="shrink-0 pt-0.5">
+              <div className="hidden sm:block shrink-0 pt-0.5">
                 <PaperFanIllustration />
               </div>
             </div>
