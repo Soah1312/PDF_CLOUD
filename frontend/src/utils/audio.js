@@ -7,7 +7,7 @@
  * - AudioContext created lazily after first user gesture only; NEVER autoplays
  */
 
-import { motionBus } from './motion';
+import { motionBus } from './motion.js';
 
 const STORAGE_KEY = 'bindery_audio_enabled';
 
