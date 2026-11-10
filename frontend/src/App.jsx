@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/layout/Navbar';
@@ -7,6 +7,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import CommandPalette from './components/common/CommandPalette';
 import MobileBottomNav from './components/layout/MobileBottomNav';
 import ToolsBottomSheet from './components/common/ToolsBottomSheet';
+import pressRoom from './background/pressroom';
 
 // Pages
 import Home from './pages/Home';
@@ -20,6 +21,17 @@ import ToolRunner from './pages/ToolRunner';
 function AppContent() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [toolsSheetOpen, setToolsSheetOpen] = useState(false);
+  const pressroomContainerRef = useRef(null);
+
+  // Initialize The Press Room reactive background
+  useEffect(() => {
+    if (pressroomContainerRef.current) {
+      pressRoom.init(pressroomContainerRef.current);
+    }
+    return () => {
+      pressRoom.destroy();
+    };
+  }, []);
 
   // Global Ctrl+K / Cmd+K handler
   useEffect(() => {
@@ -35,6 +47,14 @@ function AppContent() {
 
   return (
     <div className="flex flex-col min-h-screen bg-paper text-ink font-sans selection:bg-marigold selection:text-ink relative pb-16 md:pb-0">
+      {/* "The Press Room" fixed background layer */}
+      <div
+        ref={pressroomContainerRef}
+        id="pressroom-background"
+        aria-hidden="true"
+        className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
+      />
+
       {/* Subtle paper-grain texture overlay (auto-hidden on low-end/mobile) */}
       <div className="paper-grain-overlay" aria-hidden="true" />
 
@@ -51,13 +71,15 @@ function AppContent() {
       />
 
       {/* Top Bar */}
-      <Navbar
-        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-        onOpenToolsSheet={() => setToolsSheetOpen(true)}
-      />
+      <div className="relative z-10">
+        <Navbar
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          onOpenToolsSheet={() => setToolsSheetOpen(true)}
+        />
+      </div>
 
       {/* Main Content Area */}
-      <main className="flex-1">
+      <main className="flex-1 relative z-10">
         <Routes>
           {/* Public & Guest Accessible Routes */}
           <Route path="/" element={<Home />} />
