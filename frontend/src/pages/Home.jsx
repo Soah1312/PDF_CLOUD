@@ -289,6 +289,7 @@ export default function Home() {
         setIsDragging(false);
         setIsThunking(true);
         setTimeout(() => setIsThunking(false), 220);
+        motionBus.emit('audio:play', 'thunk');
         motionBus.emit('pressroom:state', 'dropped');
         setTimeout(() => {
           motionBus.emit('pressroom:state', 'idle');

@@ -292,6 +292,7 @@ export default function ToolRunner() {
     setIsDragging(false);
     setIsThunking(true);
     setTimeout(() => setIsThunking(false), 220);
+    motionBus.emit('audio:play', 'thunk');
     motionBus.emit('pressroom:state', 'dropped');
     setTimeout(() => {
       motionBus.emit('pressroom:state', 'idle');
@@ -532,6 +533,7 @@ export default function ToolRunner() {
         navigator.vibrate(15);
       }
 
+      motionBus.emit('audio:play', 'thunk');
       motionBus.emit('pressroom:state', 'success');
       setTimeout(() => {
         motionBus.emit('pressroom:state', 'idle');
