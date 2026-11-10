@@ -37,6 +37,7 @@ import {
   deleteWorkflow,
   runWorkflowPipeline,
 } from '../services/api';
+import { motionBus } from '../utils/motion';
 
 const PRESET_BLUEPRINTS = [
   {
@@ -386,6 +387,7 @@ export default function WorkflowStudio() {
     setIsExecuting(true);
     setExecutionError(null);
     setExecutionResult(null);
+    motionBus.emit('pressroom:state', 'processing:generic');
 
     setStepExecutions(
       steps.map((s, idx) => ({
@@ -411,9 +413,17 @@ export default function WorkflowStudio() {
       );
 
       const res = await runWorkflowPipeline(formData);
+      motionBus.emit('pressroom:state', 'success');
+      setTimeout(() => {
+        motionBus.emit('pressroom:state', 'idle');
+      }, 700);
       setExecutionResult(res);
       setStepExecutions(res.step_results || []);
     } catch (err) {
+      motionBus.emit('pressroom:state', 'error');
+      setTimeout(() => {
+        motionBus.emit('pressroom:state', 'idle');
+      }, 400);
       console.error('Pipeline execution error:', err);
       const detail = err.response?.data?.detail;
       if (detail && typeof detail === 'object') {

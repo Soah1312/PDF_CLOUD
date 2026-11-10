@@ -57,6 +57,7 @@ import {
 } from '../services/api';
 import { BINDERY_TOOLS } from '../config/tools';
 import { renderPdfThumbnail, getPdfPageCount } from '../utils/pdfThumbnails';
+import { motionBus } from '../utils/motion';
 
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
@@ -218,6 +219,8 @@ export default function ToolRunner() {
         setErrorMessage(
           `Document "${f.name}" exceeds the 100 MB size limit (${formatBytes(f.size)}).`
         );
+        motionBus.emit('pressroom:state', 'error');
+        setTimeout(() => motionBus.emit('pressroom:state', 'idle'), 400);
         return;
       }
     }
@@ -234,10 +237,17 @@ export default function ToolRunner() {
           setErrorMessage(
             `File "${f.name}" is not supported by ${currentTool.title}. Expected ${currentTool.accept}.`
           );
+          motionBus.emit('pressroom:state', 'error');
+          setTimeout(() => motionBus.emit('pressroom:state', 'idle'), 400);
           return;
         }
       }
     }
+
+    motionBus.emit('pressroom:state', 'dropped');
+    setTimeout(() => {
+      motionBus.emit('pressroom:state', 'idle');
+    }, 200);
 
     if (currentTool.multiple) {
       setSelectedFiles((prev) => [...prev, ...filesArray]);
@@ -249,6 +259,10 @@ export default function ToolRunner() {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
+    motionBus.emit('pressroom:state', 'dropped');
+    setTimeout(() => {
+      motionBus.emit('pressroom:state', 'idle');
+    }, 200);
     if (e.dataTransfer?.files) {
       handleFiles(e.dataTransfer.files);
     }
@@ -462,6 +476,12 @@ export default function ToolRunner() {
           : 'Processing document on bench...'
       );
 
+      let procState = 'processing:generic';
+      if (currentTool.id === 'merge') procState = 'processing:merge';
+      else if (currentTool.id === 'split') procState = 'processing:split';
+      else if (currentTool.id === 'compress') procState = 'processing:compress';
+      motionBus.emit('pressroom:state', procState);
+
       const apiFunc = getToolApi();
       const res = await apiFunc(formData);
 
@@ -470,8 +490,18 @@ export default function ToolRunner() {
         navigator.vibrate(15);
       }
 
+      motionBus.emit('pressroom:state', 'success');
+      setTimeout(() => {
+        motionBus.emit('pressroom:state', 'idle');
+      }, 700);
+
       setResultData(res);
     } catch (err) {
+      motionBus.emit('pressroom:state', 'error');
+      setTimeout(() => {
+        motionBus.emit('pressroom:state', 'idle');
+      }, 400);
+
       if (err.name === 'CanceledError' || err.name === 'AbortError') {
         setErrorMessage('Execution cancelled.');
       } else {
@@ -544,6 +574,7 @@ export default function ToolRunner() {
     setCutPoints(new Set());
     setSelectedPages(new Set());
     setSplitRange('');
+    motionBus.emit('pressroom:state', 'idle');
   };
 
   // Chain output file into another tool without re-uploading
@@ -965,9 +996,15 @@ export default function ToolRunner() {
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => {
                 e.preventDefault();
-                setIsDragging(true);
+                if (!isDragging) {
+                  setIsDragging(true);
+                  motionBus.emit('pressroom:state', 'dragover');
+                }
               }}
-              onDragLeave={() => setIsDragging(false)}
+              onDragLeave={() => {
+                setIsDragging(false);
+                motionBus.emit('pressroom:state', 'idle');
+              }}
               onDrop={handleDrop}
               className={`relative cursor-pointer p-12 sm:p-16 rounded-md border-2 border-dashed transition-all duration-150 text-center select-none ${
                 isDragging

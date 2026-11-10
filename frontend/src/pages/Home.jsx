@@ -13,6 +13,7 @@ import {
 import { BINDERY_TOOLS, TOOL_CATEGORIES } from '../config/tools';
 import ToolCard from '../components/common/ToolCard';
 import PrivacyBottomSheet from '../components/common/PrivacyBottomSheet';
+import { motionBus } from '../utils/motion';
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -148,6 +149,10 @@ export default function Home() {
     if (!files.length) return;
 
     setDroppedFiles(files);
+    motionBus.emit('pressroom:state', 'dropped');
+    setTimeout(() => {
+      motionBus.emit('pressroom:state', 'idle');
+    }, 200);
 
     if (files.length === 1) {
       const file = files[0];
@@ -223,6 +228,7 @@ export default function Home() {
   const resetDroppedFiles = () => {
     setDroppedFiles([]);
     setFileAnalysis(null);
+    motionBus.emit('pressroom:state', 'idle');
   };
 
   return (
@@ -230,14 +236,28 @@ export default function Home() {
       className="min-h-screen bg-paper text-ink pb-24 md:pb-16 relative overflow-x-hidden"
       onDragOver={(e) => {
         e.preventDefault();
-        setIsDragging(true);
+        if (!isDragging) {
+          setIsDragging(true);
+          motionBus.emit('pressroom:state', 'dragover');
+        }
       }}
       onDragLeave={(e) => {
         if (!e.relatedTarget) {
           setIsDragging(false);
+          motionBus.emit('pressroom:state', 'idle');
         }
       }}
-      onDrop={handleDrop}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        motionBus.emit('pressroom:state', 'dropped');
+        setTimeout(() => {
+          motionBus.emit('pressroom:state', 'idle');
+        }, 200);
+        if (e.dataTransfer?.files?.length) {
+          handleFilesChosen(e.dataTransfer.files);
+        }
+      }}
     >
       {/* Hidden file inputs */}
       <input
