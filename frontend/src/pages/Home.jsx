@@ -107,7 +107,10 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [isOverDropZone, setIsOverDropZone] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const windowDragCounter = useRef(0);
+  const dropZoneDragCounter = useRef(0);
 
   // Dropped file inspection state
   const [droppedFiles, setDroppedFiles] = useState([]);
@@ -271,22 +274,39 @@ export default function Home() {
   return (
     <div
       className="min-h-screen bg-paper text-ink pb-24 md:pb-16 relative overflow-x-hidden"
+      onDragEnter={(e) => {
+        e.preventDefault();
+        windowDragCounter.current += 1;
+        if (!isDragging) {
+          setIsDragging(true);
+          motionBus.emit('pressroom:state', 'dragover');
+        }
+      }}
       onDragOver={(e) => {
         e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
         if (!isDragging) {
           setIsDragging(true);
           motionBus.emit('pressroom:state', 'dragover');
         }
       }}
       onDragLeave={(e) => {
-        if (!e.relatedTarget) {
+        e.preventDefault();
+        windowDragCounter.current -= 1;
+        if (windowDragCounter.current <= 0) {
+          windowDragCounter.current = 0;
           setIsDragging(false);
+          setIsOverDropZone(false);
+          dropZoneDragCounter.current = 0;
           motionBus.emit('pressroom:state', 'idle');
         }
       }}
       onDrop={(e) => {
         e.preventDefault();
+        windowDragCounter.current = 0;
+        dropZoneDragCounter.current = 0;
         setIsDragging(false);
+        setIsOverDropZone(false);
         setIsThunking(true);
         setTimeout(() => setIsThunking(false), 220);
         motionBus.emit('audio:play', 'thunk');
@@ -391,85 +411,228 @@ export default function Home() {
 
           {!fileAnalysis ? (
             <div
-              className={`group relative p-5 rounded-[6px] border transition-all duration-200 shadow-[0_1px_3px_rgba(36,27,20,0.04)] ${
-                isDragging
-                  ? 'bg-kraft/70 border-red -translate-y-0.5 shadow-ink-drag'
+              onDragEnter={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZoneDragCounter.current += 1;
+                setIsOverDropZone(true);
+                setIsDragging(true);
+                motionBus.emit('pressroom:state', 'dragover');
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'copy';
+                if (!isOverDropZone) {
+                  setIsOverDropZone(true);
+                }
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZoneDragCounter.current -= 1;
+                if (dropZoneDragCounter.current <= 0) {
+                  dropZoneDragCounter.current = 0;
+                  setIsOverDropZone(false);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                windowDragCounter.current = 0;
+                dropZoneDragCounter.current = 0;
+                setIsDragging(false);
+                setIsOverDropZone(false);
+                setIsThunking(true);
+                setTimeout(() => setIsThunking(false), 220);
+                motionBus.emit('audio:play', 'thunk');
+                motionBus.emit('pressroom:state', 'dropped');
+                setTimeout(() => {
+                  motionBus.emit('pressroom:state', 'idle');
+                }, 200);
+                if (e.dataTransfer?.files?.length) {
+                  handleFilesChosen(e.dataTransfer.files);
+                }
+              }}
+              className={`group relative p-5 sm:p-6 rounded-[8px] border transition-all duration-200 select-none ${
+                isOverDropZone
+                  ? 'bg-[#F4E8D8] border-red ring-4 ring-red/25 -translate-y-1.5 scale-[1.015] shadow-ink-drag'
+                  : isDragging
+                  ? 'bg-kraft/60 border-red/60 -translate-y-0.5 shadow-ink-lift'
                   : 'bg-vellum border-rule hover:border-rule-strong hover:shadow-subtle'
               } ${isThunking ? 'animate-thunk' : ''}`}
             >
-              {/* Registration "+" marks in four corners (rotates 45deg & moves 2px inward on hover) */}
+              {/* Registration "+" marks in four corners (rotates 45deg & turns red when active) */}
               <span
-                className="absolute top-2 left-2 font-mono text-xs text-rule-strong select-none leading-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:translate-x-0.5 group-hover:translate-y-0.5"
+                className={`absolute top-2.5 left-2.5 font-mono text-xs select-none leading-none transition-all duration-200 ease-out ${
+                  isOverDropZone
+                    ? 'text-red rotate-45 scale-125 font-bold'
+                    : isDragging
+                    ? 'text-red rotate-45 scale-110'
+                    : 'text-rule-strong group-hover:rotate-45 group-hover:scale-110 group-hover:text-ink'
+                }`}
                 aria-hidden="true"
               >
                 +
               </span>
               <span
-                className="absolute top-2 right-2 font-mono text-xs text-rule-strong select-none leading-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:-translate-x-0.5 group-hover:translate-y-0.5"
+                className={`absolute top-2.5 right-2.5 font-mono text-xs select-none leading-none transition-all duration-200 ease-out ${
+                  isOverDropZone
+                    ? 'text-red rotate-45 scale-125 font-bold'
+                    : isDragging
+                    ? 'text-red rotate-45 scale-110'
+                    : 'text-rule-strong group-hover:rotate-45 group-hover:scale-110 group-hover:text-ink'
+                }`}
                 aria-hidden="true"
               >
                 +
               </span>
               <span
-                className="absolute bottom-2 left-2 font-mono text-xs text-rule-strong select-none leading-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                className={`absolute bottom-2.5 left-2.5 font-mono text-xs select-none leading-none transition-all duration-200 ease-out ${
+                  isOverDropZone
+                    ? 'text-red rotate-45 scale-125 font-bold'
+                    : isDragging
+                    ? 'text-red rotate-45 scale-110'
+                    : 'text-rule-strong group-hover:rotate-45 group-hover:scale-110 group-hover:text-ink'
+                }`}
                 aria-hidden="true"
               >
                 +
               </span>
               <span
-                className="absolute bottom-2 right-2 font-mono text-xs text-rule-strong select-none leading-none transition-transform duration-200 ease-out group-hover:rotate-45 group-hover:-translate-x-0.5 group-hover:-translate-y-0.5"
+                className={`absolute bottom-2.5 right-2.5 font-mono text-xs select-none leading-none transition-all duration-200 ease-out ${
+                  isOverDropZone
+                    ? 'text-red rotate-45 scale-125 font-bold'
+                    : isDragging
+                    ? 'text-red rotate-45 scale-110'
+                    : 'text-rule-strong group-hover:rotate-45 group-hover:scale-110 group-hover:text-ink'
+                }`}
                 aria-hidden="true"
               >
                 +
               </span>
 
-              {/* Dashed inner border wrapper with marching effect on hover */}
+              {/* Inner Tray Container with animated SVG marching dashed boundary */}
               <div
-                className={`border rounded-[4px] p-4 sm:p-5 flex flex-col items-center gap-3 transition-all duration-200 ${
-                  isDragging
-                    ? 'border-solid border-red bg-kraft/40'
-                    : 'border-dashed border-rule-strong group-hover:border-ink-soft animate-marching-border'
+                className={`relative rounded-[6px] p-4 sm:p-6 flex flex-col items-center gap-3.5 transition-all duration-200 ${
+                  isOverDropZone
+                    ? 'bg-kraft/60'
+                    : isDragging
+                    ? 'bg-kraft/30'
+                    : 'bg-transparent'
                 }`}
               >
-                {/* Full-width primary button (56px tall, drops into small tray on dragover) */}
-                <div className={`w-full transition-transform duration-200 ease-out ${isDragging ? 'translate-y-1.5' : ''}`}>
-                  <PrimaryButton
-                    onClick={() => {
-                      triggerHaptic();
-                      fileInputRef.current?.click();
-                    }}
-                    className="w-full h-14"
-                    icon={UploadCloud}
-                  >
-                    {isDragging ? 'Release to add' : 'Choose PDF files'}
-                  </PrimaryButton>
-                </div>
+                {/* SVG Marching Dashed Border around inner tray */}
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none rounded-[6px]"
+                  aria-hidden="true"
+                >
+                  <rect
+                    x="1.5"
+                    y="1.5"
+                    width="calc(100% - 3px)"
+                    height="calc(100% - 3px)"
+                    rx="5"
+                    fill="none"
+                    stroke={isOverDropZone ? '#D9441F' : isDragging ? '#F25C37' : '#D5C6A8'}
+                    strokeWidth={isOverDropZone ? 2 : 1.5}
+                    strokeDasharray="6 6"
+                    className={isOverDropZone || isDragging ? 'animate-marching-border' : 'group-hover:animate-marching-border'}
+                  />
+                </svg>
 
-                {/* Coarse-pointer devices only (touch/mobile): Scan with camera & share copy */}
-                <div className="w-full flex flex-col items-center gap-3 pointer-coarse-only">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic();
-                      cameraInputRef.current?.click();
-                    }}
-                    className="w-full h-11 flex items-center justify-center gap-2 rounded-[6px] border border-rule-strong bg-vellum hover:bg-kraft/50 active:bg-kraft/70 active:translate-y-0.5 text-ink font-medium text-xs transition-colors focus:outline-none focus:ring-2 focus:ring-cyan touch-target select-none"
-                  >
-                    <Camera className="w-4 h-4 text-ink-soft" strokeWidth={1.5} />
-                    <span>Scan with camera</span>
-                  </button>
+                {isOverDropZone ? (
+                  /* Active Drop Target State: Immediate, Unmistakable Awareness */
+                  <div className="py-6 px-3 flex flex-col items-center justify-center text-center gap-3 animate-fade-rise pointer-events-none w-full">
+                    <div className="w-14 h-14 rounded-full bg-red/15 border-2 border-red/50 flex items-center justify-center text-red shadow-[0_6px_16px_rgba(217,68,31,0.25)] animate-bounce">
+                      <UploadCloud className="w-7 h-7 text-red" strokeWidth={2.2} />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-display text-xl sm:text-2xl text-red tracking-tight font-semibold leading-tight">
+                        Release to drop onto the bench
+                      </p>
+                      <p className="font-mono text-xs text-ink-soft">
+                        PDF folios will be loaded immediately into memory
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-mono text-red font-semibold bg-red/10 border border-red/30 px-3 py-1 rounded-full shadow-sm mt-1">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red"></span>
+                      </span>
+                      <span>Drop target active — release now</span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard / Window-drag State */
+                  <>
+                    {/* Visual Cue: workbench drop zone icon & clear invitation */}
+                    <div className="flex flex-col items-center text-center gap-1.5 pt-1 pointer-events-none">
+                      <div className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-200 ${
+                        isDragging
+                          ? 'bg-red/10 border-red/40 text-red animate-bounce'
+                          : 'bg-kraft/50 border-rule text-ink-soft group-hover:text-red group-hover:border-red/40 group-hover:bg-red/5'
+                      }`}>
+                        <UploadCloud className="w-5 h-5 transition-transform duration-200 group-hover:-translate-y-0.5" strokeWidth={1.8} />
+                      </div>
+                      
+                      <div className="space-y-0.5">
+                        <p className="font-display text-base sm:text-lg text-ink font-medium tracking-tight">
+                          {isDragging ? 'Bring folios here to drop' : 'Drag & drop PDF folios here'}
+                        </p>
+                        <p className="font-mono text-xs text-ink-soft">
+                          {isDragging ? 'Release anywhere within this frame' : 'or click below to choose documents from your device'}
+                        </p>
+                      </div>
 
-                  <p className="font-mono text-xs text-ink-soft select-none text-center">
-                    or share a PDF to CloudPDF from any app
-                  </p>
-                </div>
+                      {/* Technical Bench Chip */}
+                      <div className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-mono text-ink-faint bg-paper px-2.5 py-0.5 rounded border border-rule/60 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-moss inline-block shrink-0"></span>
+                        <span>Zero retention · In-memory processing · Up to 100MB</span>
+                      </div>
+                    </div>
 
-                {/* Fine-pointer devices only (desktop): Drag & drop copy */}
-                <div className="w-full flex-col items-center pointer-fine-only">
-                  <p className="font-mono text-xs text-ink-soft select-none text-center py-1">
-                    {isDragging ? 'Release folios onto the bench' : 'or drag and drop PDF folios directly here'}
-                  </p>
-                </div>
+                    {/* Primary Button: Choose PDF files */}
+                    <div className={`w-full max-w-sm transition-transform duration-200 ease-out ${isDragging ? 'translate-y-1' : ''}`}>
+                      <PrimaryButton
+                        onClick={() => {
+                          triggerHaptic();
+                          fileInputRef.current?.click();
+                        }}
+                        className="w-full h-13 sm:h-14"
+                        icon={UploadCloud}
+                      >
+                        Choose PDF files
+                      </PrimaryButton>
+                    </div>
+
+                    {/* Coarse-pointer devices only (touch/mobile): Scan with camera & share copy */}
+                    <div className="w-full max-w-sm flex flex-col items-center gap-2.5 pointer-coarse-only">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic();
+                          cameraInputRef.current?.click();
+                        }}
+                        className="w-full h-11 flex items-center justify-center gap-2 rounded-[6px] border border-rule-strong bg-vellum hover:bg-kraft/50 active:bg-kraft/70 active:translate-y-0.5 text-ink font-medium text-xs transition-colors focus:outline-none focus:ring-2 focus:ring-cyan touch-target select-none"
+                      >
+                        <Camera className="w-4 h-4 text-ink-soft" strokeWidth={1.5} />
+                        <span>Scan with camera</span>
+                      </button>
+
+                      <p className="font-mono text-xs text-ink-soft select-none text-center">
+                        or share a PDF to CloudPDF from any app
+                      </p>
+                    </div>
+
+                    {/* Fine-pointer devices only (desktop): Drag & drop copy */}
+                    <div className="w-full flex-col items-center pointer-fine-only">
+                      <p className="font-mono text-[11px] text-ink-faint select-none text-center">
+                        (release folios directly onto this workbench from File Explorer or Finder)
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ) : (
