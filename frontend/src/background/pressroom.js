@@ -85,9 +85,9 @@ class PressRoomController {
     // Build the 3 depth layer containers
     this.layers = [];
     const layerDepths = [
-      { name: 'far', maxShift: 4, strokeOpacity: 0.03 },
-      { name: 'mid', maxShift: 10, strokeOpacity: 0.045 },
-      { name: 'near', maxShift: 18, strokeOpacity: 0.06 },
+      { name: 'far', maxShift: 4, strokeOpacity: 0.05 },
+      { name: 'mid', maxShift: 10, strokeOpacity: 0.075 },
+      { name: 'near', maxShift: 18, strokeOpacity: 0.10 },
     ];
 
     layerDepths.forEach((depthConfig, idx) => {
@@ -198,13 +198,14 @@ class PressRoomController {
       svg.style.top = `${bp.yPct}vh`;
       svg.style.pointerEvents = 'none';
 
-      // Outer folio rectangle (no fill, outlined)
+      // Outer folio rectangle (vellum translucent fill with tactile ink outline)
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('x', '16');
       rect.setAttribute('y', '16');
       rect.setAttribute('width', bp.w - 32);
       rect.setAttribute('height', bp.h - 32);
       rect.setAttribute('rx', '4');
+      rect.setAttribute('fill', 'rgba(250, 246, 236, 0.45)');
       rect.setAttribute('stroke', strokeColor);
       rect.setAttribute('stroke-width', '1.2');
       svg.appendChild(rect);

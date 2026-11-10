@@ -188,6 +188,22 @@ html.motion-off ::after {
   animation: marching-border 1.2s linear infinite;
 }
 
+/* Dropdown & Modal Scale-in Entrance */
+@keyframes scaleIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scaleIn 140ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
 /* File card corner curl on hover */
 .file-corner-curl {
   position: absolute;
@@ -334,9 +350,9 @@ html.motion-off ::after {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 236, 190, 0.02) 20%,
-    rgba(255, 236, 190, 0.16) 50%,
-    rgba(255, 236, 190, 0.02) 80%,
+    rgba(255, 236, 190, 0.04) 20%,
+    rgba(255, 236, 190, 0.24) 50%,
+    rgba(255, 236, 190, 0.04) 80%,
     transparent 100%
   );
   pointer-events: none;

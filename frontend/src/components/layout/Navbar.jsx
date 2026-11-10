@@ -20,11 +20,9 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
   const navigate = useNavigate();
 
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [privacyOpen, setPrivacyOpen] = useState(false);
   const [isCtrlKDepressed, setIsCtrlKDepressed] = useState(false);
 
   const toolsDropdownRef = useRef(null);
-  const privacyRef = useRef(null);
 
   // Ctrl+K keycap depression listener
   useEffect(() => {
@@ -51,9 +49,6 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
     function handleClickOutside(event) {
       if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(event.target)) {
         setToolsOpen(false);
-      }
-      if (privacyRef.current && !privacyRef.current.contains(event.target)) {
-        setPrivacyOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -121,13 +116,19 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
             </div>
           </Link>
 
-          {/* Desktop Tools Dropdown */}
-          <div className="relative hidden md:block" ref={toolsDropdownRef}>
+          {/* Tools Dropdown (Desktop Mega-Menu, Mobile/Tablet Bottom-Sheet trigger) */}
+          <div className="relative" ref={toolsDropdownRef}>
             <button
-              onClick={() => setToolsOpen(!toolsOpen)}
+              onClick={() => {
+                if (window.innerWidth < 768) {
+                  onOpenToolsSheet?.();
+                } else {
+                  setToolsOpen(!toolsOpen);
+                }
+              }}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded border transition-colors ${
                 toolsOpen
-                  ? 'bg-kraft border-rule-strong text-ink'
+                  ? 'bg-kraft border-rule-strong text-ink shadow-sm'
                   : 'bg-paper/70 border-rule hover:bg-kraft/50 text-ink-soft hover:text-ink'
               }`}
               aria-expanded={toolsOpen}
@@ -145,8 +146,7 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
             {/* Tools Mega Menu */}
             {toolsOpen && (
               <div
-                className="absolute left-0 mt-1.5 w-[560px] bg-vellum border border-rule rounded-md shadow-ink-lift p-4 grid grid-cols-2 gap-4 z-50 animate-in fade-in duration-120"
-                style={{ animation: 'scaleIn 120ms ease-out forwards' }}
+                className="absolute top-full left-0 mt-2 w-[560px] max-w-[90vw] bg-vellum border border-rule rounded-md shadow-ink-drag p-4 grid grid-cols-2 gap-4 z-50 animate-scale-in"
               >
                 {toolGroups.map((group) => (
                   <div key={group.name} className="space-y-1.5">
@@ -198,48 +198,6 @@ export default function Navbar({ onOpenCommandPalette, onOpenToolsSheet }) {
                     </kbd>
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Privacy Popover on Desktop (Hidden on mobile; mobile uses trust line) */}
-          <div className="relative hidden md:block" ref={privacyRef}>
-            <button
-              onClick={() => setPrivacyOpen(!privacyOpen)}
-              className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-mono text-ink-soft bg-paper/60 border border-rule/80 rounded hover:bg-kraft/40 hover:text-ink transition-colors touch-target"
-              title="Inspect zero-retention architecture"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-moss shrink-0"></span>
-              <span>Stateless & In-Memory</span>
-              <Info className="w-3 h-3 text-ink-faint shrink-0" strokeWidth={1.5} />
-            </button>
-
-            {/* Privacy Popover on Desktop */}
-            {privacyOpen && (
-              <div className="absolute top-full left-0 mt-1.5 w-80 bg-vellum border border-rule rounded-md shadow-ink-lift p-4 z-50 text-xs space-y-2.5">
-                <div className="flex items-center justify-between border-b border-rule pb-2">
-                  <div className="flex items-center gap-1.5 font-medium text-ink">
-                    <ShieldCheck className="w-4 h-4 text-moss" strokeWidth={1.5} />
-                    <span>Print-Shop Privacy Guarantee</span>
-                  </div>
-                  <button
-                    onClick={() => setPrivacyOpen(false)}
-                    className="p-1 text-ink-faint hover:text-ink"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <p className="text-ink-soft leading-relaxed text-[11px]">
-                  Files uploaded to guest bench tools are strictly processed in volatile server RAM. They are{' '}
-                  <strong className="text-ink font-semibold">discarded immediately</strong> upon download or timeout.
-                </p>
-                <p className="text-ink-soft leading-relaxed text-[11px]">
-                  Documents are only stored persistently when an authenticated user explicitly clicks{' '}
-                  <span className="font-mono text-ink bg-kraft px-1 py-0.5 rounded text-[10px]">
-                    Save to Vault
-                  </span>
-                  , where they receive client-isolated AES-256 encryption.
-                </p>
               </div>
             )}
           </div>

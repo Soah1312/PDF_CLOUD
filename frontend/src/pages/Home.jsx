@@ -273,7 +273,7 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen bg-paper text-ink pb-24 md:pb-16 relative overflow-x-hidden"
+      className="min-h-screen text-ink pb-24 md:pb-16 relative overflow-x-hidden"
       onDragEnter={(e) => {
         e.preventDefault();
         windowDragCounter.current += 1;
@@ -375,7 +375,7 @@ export default function Home() {
                 title="View zero-retention guarantee"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-moss shrink-0" strokeWidth={1.5} />
-                <span>FILES STAY IN MEMORY — NEVER STORED</span>
+                <span>FILES NEVER STORED — ZERO RETENTION GUARANTEE</span>
               </button>
             </div>
           </div>
@@ -552,7 +552,7 @@ export default function Home() {
                         Release to drop onto the bench
                       </p>
                       <p className="font-mono text-xs text-ink-soft">
-                        PDF folios will be loaded immediately into memory
+                        PDF folios will be loaded immediately on your workbench
                       </p>
                     </div>
                     <div className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-mono text-red font-semibold bg-red/10 border border-red/30 px-3 py-1 rounded-full shadow-sm mt-1">
@@ -588,7 +588,7 @@ export default function Home() {
                       {/* Technical Bench Chip */}
                       <div className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-mono text-ink-faint bg-paper px-2.5 py-0.5 rounded border border-rule/60 mt-0.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-moss inline-block shrink-0"></span>
-                        <span>Zero retention · In-memory processing · Up to 100MB</span>
+                        <span>Zero retention · Supports PDF, DOCX, Images up to 100MB</span>
                       </div>
                     </div>
 

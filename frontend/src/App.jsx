@@ -72,7 +72,7 @@ function AppContent() {
       />
 
       {/* Top Bar */}
-      <div className="relative z-10">
+      <div className="relative z-40">
         <Navbar
           onOpenCommandPalette={() => setCommandPaletteOpen(true)}
           onOpenToolsSheet={() => setToolsSheetOpen(true)}
