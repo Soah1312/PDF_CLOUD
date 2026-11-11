@@ -244,7 +244,7 @@ export const fetchWorkflowExecution = async (executionId) => {
   return response.data;
 };
 
-// --- OCRmyPDF & Tesseract OCR Studio APIs ---
+// --- OCR Studio APIs ---
 export const inspectPdfOcr = async (file) => {
   const token = localStorage.getItem('cloudpdf_auth_token');
   const headers = { 'Content-Type': 'multipart/form-data' };
@@ -281,6 +281,19 @@ export const getOcrJobStatus = async (jobId) => {
     headers['X-Guest-Session-ID'] = getOrCreateGuestSessionId();
   }
   const response = await api.get(`/api/v1/ocr/jobs/${jobId}`, { headers });
+  return response.data;
+};
+
+export const fetchOcrPdfBlob = async (jobId) => {
+  const token = localStorage.getItem('cloudpdf_auth_token');
+  const headers = {};
+  if (!token) {
+    headers['X-Guest-Session-ID'] = getOrCreateGuestSessionId();
+  }
+  const response = await api.get(`/api/v1/ocr/jobs/${jobId}/download`, {
+    headers,
+    responseType: 'blob',
+  });
   return response.data;
 };
 

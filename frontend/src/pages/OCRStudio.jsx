@@ -12,7 +12,6 @@ import {
   Search,
   ArrowRight,
   ShieldCheck,
-  Cpu,
   Layers,
   Sparkles,
   Eye,
@@ -20,7 +19,11 @@ import {
   AlertTriangle,
   ArrowLeft,
   Clock,
-  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -28,16 +31,19 @@ import {
   createSearchablePdf,
   getOcrJobStatus,
   downloadOcrPdf,
+  fetchOcrPdfBlob,
   fetchOcrJobs,
 } from '../services/api';
+import { loadPdfDocument, renderPdfPageToCanvas } from '../utils/pdfThumbnails';
+import DocumentPreviewModal from '../components/common/DocumentPreviewModal';
 
 const STAGE_LABELS = {
   QUEUED: 'Queued in Processing Pipeline...',
   VALIDATING: 'Validating Document Geometry & Integrity...',
-  STORING_ORIGINAL: 'Transferring to Encrypted Private S3 Bucket...',
-  OCR_PROCESSING: 'OCRmyPDF + Tesseract Recognizing Glyphs & Layout...',
+  STORING_ORIGINAL: 'Ingesting Document to Encrypted Storage...',
+  OCR_PROCESSING: 'Recognizing Characters, Glyphs & Layout...',
   VERIFYING_OUTPUT: 'Verifying Injected Text Layer & PDF Structure...',
-  STORING_OUTPUT: 'Finalizing Searchable PDF in S3 Storage...',
+  STORING_OUTPUT: 'Finalizing Searchable Document in Secure Storage...',
   COMPLETED: 'Searchable PDF Ready!',
   FAILED: 'Processing Failed',
 };
@@ -45,6 +51,7 @@ const STAGE_LABELS = {
 export const OCRStudio = () => {
   const { user, isAuthenticated } = useAuth();
   const fileInputRef = useRef(null);
+  const canvasRef = useRef(null);
 
   // File & Inspection State
   const [file, setFile] = useState(null);
@@ -52,6 +59,17 @@ export const OCRStudio = () => {
   const [isInspecting, setIsInspecting] = useState(false);
   const [inspectionResult, setInspectionResult] = useState(null);
   const [forceOcr, setForceOcr] = useState(false);
+
+  // In-Browser PDF Preview State
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [searchablePdfDoc, setSearchablePdfDoc] = useState(null);
+  const [previewView, setPreviewView] = useState('original'); // 'original' | 'searchable'
+  const [currentPage, setCurrentPage] = useState(1);
+  const [numPages, setNumPages] = useState(1);
+  const [zoomScale, setZoomScale] = useState(1.0);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [fullscreenModalOpen, setFullscreenModalOpen] = useState(false);
 
   // Execution & Progress State
   const [isProcessing, setIsProcessing] = useState(false);
@@ -64,7 +82,7 @@ export const OCRStudio = () => {
   const [recentJobs, setRecentJobs] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
 
-  // Format bytes
+  // Format bytes helper
   const formatBytes = (bytes) => {
     if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
@@ -90,6 +108,37 @@ export const OCRStudio = () => {
     loadRecentJobs();
   }, [isAuthenticated]);
 
+  // Render active preview page to canvas
+  useEffect(() => {
+    const activeDoc = previewView === 'searchable' && searchablePdfDoc ? searchablePdfDoc : previewDoc;
+    if (!activeDoc || !canvasRef.current) return;
+
+    let isCancelled = false;
+
+    async function renderPage() {
+      try {
+        setPreviewLoading(true);
+        setPreviewError('');
+        await renderPdfPageToCanvas(activeDoc, currentPage, canvasRef.current, zoomScale);
+      } catch (err) {
+        if (!isCancelled) {
+          console.warn(`[OCRStudio] Render page ${currentPage} error:`, err);
+          setPreviewError('Unable to render page on canvas.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setPreviewLoading(false);
+        }
+      }
+    }
+
+    renderPage();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [previewDoc, searchablePdfDoc, previewView, currentPage, zoomScale]);
+
   // Handle file selection
   const handleFileSelect = async (selectedFile) => {
     if (!selectedFile) return;
@@ -107,15 +156,33 @@ export const OCRStudio = () => {
     setCurrentJob(null);
     setInspectionResult(null);
     setForceOcr(false);
+    setPreviewDoc(null);
+    setSearchablePdfDoc(null);
+    setPreviewView('original');
+    setCurrentPage(1);
+    setZoomScale(1.0);
+    setPreviewLoading(true);
 
-    // Pre-flight inspection for existing digital text
+    // 1. Load document in browser for interactive preview
+    try {
+      const doc = await loadPdfDocument(selectedFile);
+      if (doc) {
+        setPreviewDoc(doc);
+        setNumPages(doc.numPages);
+      }
+    } catch (docErr) {
+      console.warn('[OCRStudio] PDF preview load warning:', docErr);
+    } finally {
+      setPreviewLoading(false);
+    }
+
+    // 2. Pre-flight server inspection for digital text
     setIsInspecting(true);
     try {
       const inspectData = await inspectPdfOcr(selectedFile);
       setInspectionResult(inspectData);
     } catch (err) {
       console.warn('[OCRStudio] Inspection failed:', err);
-      // Non-blocking: user can still proceed with OCR
     } finally {
       setIsInspecting(false);
     }
@@ -140,14 +207,20 @@ export const OCRStudio = () => {
     }
   };
 
-  // Reset tool to upload another file
+  // Reset tool
   const handleReset = () => {
     setFile(null);
+    setPreviewDoc(null);
+    setSearchablePdfDoc(null);
+    setPreviewView('original');
     setInspectionResult(null);
     setCurrentJob(null);
     setErrorMessage('');
     setForceOcr(false);
     setIsProcessing(false);
+    setCurrentPage(1);
+    setNumPages(1);
+    setZoomScale(1.0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -164,7 +237,6 @@ export const OCRStudio = () => {
       const resp = await createSearchablePdf(file, forceOcr);
 
       if (resp.status === 'REQUIRES_CONFIRMATION') {
-        // Digital text detected and force_ocr was false
         setInspectionResult((prev) => ({
           ...prev,
           has_digital_text: true,
@@ -186,7 +258,6 @@ export const OCRStudio = () => {
         original_filename: file.name,
       });
 
-      // Start polling
       startPolling(resp.job_id);
     } catch (err) {
       console.error('[OCRStudio] Submission failed:', err);
@@ -199,7 +270,7 @@ export const OCRStudio = () => {
   // Polling loop for async OCR job
   const startPolling = (jobId) => {
     let attempts = 0;
-    const maxAttempts = 120; // Up to 4-5 minutes max
+    const maxAttempts = 120;
 
     const interval = setInterval(async () => {
       attempts += 1;
@@ -211,6 +282,21 @@ export const OCRStudio = () => {
           clearInterval(interval);
           setIsProcessing(false);
           loadRecentJobs();
+
+          // Fetch generated searchable PDF to enable instant in-browser inspection
+          try {
+            const outBlob = await fetchOcrPdfBlob(jobId);
+            if (outBlob) {
+              const outDoc = await loadPdfDocument(outBlob);
+              if (outDoc) {
+                setSearchablePdfDoc(outDoc);
+                setPreviewView('searchable');
+                setCurrentPage(1);
+              }
+            }
+          } catch (blobErr) {
+            console.warn('[OCRStudio] Could not load completed PDF blob for preview:', blobErr);
+          }
         } else if (statusData.status === 'FAILED') {
           clearInterval(interval);
           setIsProcessing(false);
@@ -249,48 +335,56 @@ export const OCRStudio = () => {
     }
   };
 
+  // Preview navigation
+  const prevPage = () => setCurrentPage((p) => Math.max(1, p - 1));
+  const nextPage = () => setCurrentPage((p) => Math.min(numPages, p + 1));
+  const zoomIn = () => setZoomScale((s) => Math.min(2.0, +(s + 0.2).toFixed(2)));
+  const zoomOut = () => setZoomScale((s) => Math.max(0.6, +(s - 0.2).toFixed(2)));
+
+  const isCompleted = currentJob && currentJob.status === 'COMPLETED';
+
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
       {/* Back link */}
       <div className="mb-6">
         <Link
           to="/"
-          className="inline-flex items-center text-xs font-mono uppercase tracking-wider text-ink-soft hover:text-ink transition-colors"
+          className="inline-flex items-center text-xs font-mono uppercase tracking-mono text-ink-soft hover:text-ink transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> Return to Bench
         </Link>
       </div>
 
       {/* Header */}
-      <div className="border-b border-rule pb-8 mb-8">
+      <div className="border-b border-rule pb-6 mb-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan/10 border border-cyan/20 text-cyan text-xs font-semibold mb-3">
-              <Cpu className="w-3.5 h-3.5 mr-1" />
-              <span>BENCH TOOL 15 • OCRmyPDF + TESSERACT OCR</span>
+            <div className="inline-flex items-center space-x-2 px-2.5 py-0.5 rounded bg-kraft/80 border border-rule text-ink text-xs font-mono tracking-mono mb-2">
+              <Layers className="w-3.5 h-3.5 text-cyan" />
+              <span>BENCH TOOL 15 • OPTICAL CHARACTER RECOGNITION</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-serif">
-              OCR Studio — Make PDF Searchable
+            <h1 className="text-3xl sm:text-4xl font-normal text-ink tracking-tight font-display">
+              Make PDF Searchable
             </h1>
             <p className="mt-2 text-sm sm:text-base text-ink-soft max-w-3xl leading-relaxed">
-              Upload scanned documents, invoices, or books. OCRmyPDF and Tesseract perform high-accuracy Optical Character
-              Recognition, embedding an invisible machine-readable text layer while preserving original scanned page image
-              appearance, dimensions, and visual clarity—enabling instant text selection, clipboard copying, and Ctrl+F keyboard search.
+              Transform scanned folios, archives, and image plates into searchable, selectable documents.
+              Embeds an invisible machine-readable text layer behind original page imagery—enabling text selection,
+              clipboard copying, and full-text keyword search while preserving exact scan clarity and geometry.
             </p>
           </div>
 
           <div className="flex flex-col items-end text-xs font-mono text-ink-faint">
             <span className="flex items-center text-moss font-semibold">
-              <ShieldCheck className="w-4 h-4 mr-1 text-moss" /> Private S3 Storage
+              <ShieldCheck className="w-4 h-4 mr-1 text-moss" /> Encrypted Vault Storage
             </span>
-            <span className="mt-1">Engine: OCRmyPDF + Tesseract</span>
+            <span className="mt-1">1:1 Scan Geometry Fidelity</span>
           </div>
         </div>
       </div>
 
       {/* Error Banner */}
       {errorMessage && (
-        <div className="mb-6 p-4 rounded-xl bg-red/10 border border-red/30 text-xs sm:text-sm text-red-dark flex items-start space-x-3 shadow-sm">
+        <div className="mb-6 p-4 rounded bg-red/10 border border-red/30 text-xs sm:text-sm text-red-dark flex items-start space-x-3 shadow-subtle animate-fade-in">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red" />
           <div className="flex-1">
             <span className="font-semibold block mb-0.5">Processing Notification:</span>
@@ -305,312 +399,473 @@ export const OCRStudio = () => {
         </div>
       )}
 
-      {/* MAIN WORKBENCH: Upload, Inspection, Processing, Completion */}
-      <div className="bg-vellum border border-rule rounded-2xl p-6 sm:p-8 shadow-sm">
-        {/* VIEW 1: UPLOAD & PRE-FLIGHT INSPECTION */}
-        {!isProcessing && (!currentJob || currentJob.status !== 'COMPLETED') && (
-          <div>
-            {/* Hidden native input */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept=".pdf,application/pdf"
-              onChange={(e) => handleFileSelect(e.target.files[0])}
-              className="hidden"
-            />
+      {/* MAIN WORKBENCH */}
+      {!file ? (
+        // VIEW: EMPTY DROPZONE
+        <div className="bg-vellum border border-rule rounded-md p-6 sm:p-10 shadow-subtle">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".pdf,application/pdf"
+            onChange={(e) => handleFileSelect(e.target.files[0])}
+            className="hidden"
+          />
 
-            {!file ? (
-              // Empty Dropzone
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-10 sm:p-14 text-center cursor-pointer transition-all ${
-                  isDragging
-                    ? 'border-cyan bg-cyan/5 scale-[0.99]'
-                    : 'border-rule hover:border-ink-soft bg-paper/50'
-                }`}
-              >
-                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-kraft/70 border border-rule flex items-center justify-center text-cyan shadow-sm">
-                  <UploadCloud className="w-8 h-8" />
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border border-dashed rounded-md p-10 sm:p-14 text-center cursor-pointer transition-all ${
+              isDragging
+                ? 'border-cyan bg-cyan/5 scale-[0.99]'
+                : 'border-rule hover:border-ink-soft bg-paper/60'
+            }`}
+          >
+            <div className="w-14 h-14 mx-auto mb-4 rounded border border-rule bg-kraft/70 flex items-center justify-center text-ink-soft shadow-subtle">
+              <UploadCloud className="w-7 h-7 text-cyan" />
+            </div>
+            <h3 className="font-display text-lg font-semibold text-ink">
+              Select or drop a scanned PDF document here
+            </h3>
+            <p className="mt-1.5 text-xs text-ink-soft max-w-md mx-auto leading-relaxed">
+              Supports single and multi-page scanned documents, receipts, ledgers, and books up to 100 MB.
+            </p>
+            <div className="mt-5 inline-flex items-center px-4 py-2 rounded bg-ink text-paper text-xs font-semibold shadow hover:bg-ink-soft transition-colors">
+              Browse Files
+            </div>
+          </div>
+        </div>
+      ) : (
+        // VIEW: SPLIT WORKBENCH WITH LIVE DOCUMENT PREVIEW DESK
+        <div className="space-y-6">
+          {/* Main Workspace Grid: Left = Preview Desk, Right = Controls & Telemetry */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* LEFT COLUMN: LIVE DOCUMENT PREVIEW DESK (7 Cols) */}
+            <div className="lg:col-span-7 bg-vellum border border-rule rounded-md p-4 sm:p-5 shadow-subtle flex flex-col space-y-3">
+              {/* Preview Desk Bar */}
+              <div className="flex items-center justify-between pb-3 border-b border-rule text-xs font-mono">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-ink uppercase tracking-mono">
+                    DOCUMENT PROOFING
+                  </span>
+                  {numPages > 1 && (
+                    <span className="px-1.5 py-0.5 rounded bg-kraft border border-rule text-[10px] text-ink-soft">
+                      Page {currentPage} of {numPages}
+                    </span>
+                  )}
                 </div>
-                <h3 className="text-lg font-bold text-ink">
-                  Select or drag a scanned PDF document here
-                </h3>
-                <p className="mt-1.5 text-xs text-ink-soft max-w-md mx-auto leading-relaxed">
-                  Supports multipage scanned documents, invoices, receipts, and archived records up to 100 MB.
-                </p>
-                <div className="mt-5 inline-flex items-center px-4 py-2 rounded-lg bg-ink text-paper text-xs font-semibold shadow hover:bg-ink-soft transition-colors">
-                  Browse Files
+
+                {/* Searchable vs Original Toggle (when completed) */}
+                {isCompleted && searchablePdfDoc && (
+                  <div className="flex items-center rounded border border-rule bg-paper p-0.5">
+                    <button
+                      onClick={() => setPreviewView('searchable')}
+                      className={`px-2 py-1 text-[11px] font-sans font-semibold rounded transition-colors ${
+                        previewView === 'searchable'
+                          ? 'bg-moss text-paper shadow-sm'
+                          : 'text-ink-soft hover:text-ink'
+                      }`}
+                    >
+                      Searchable PDF
+                    </button>
+                    <button
+                      onClick={() => setPreviewView('original')}
+                      className={`px-2 py-1 text-[11px] font-sans font-semibold rounded transition-colors ${
+                        previewView === 'original'
+                          ? 'bg-ink text-paper shadow-sm'
+                          : 'text-ink-soft hover:text-ink'
+                      }`}
+                    >
+                      Original Scan
+                    </button>
+                  </div>
+                )}
+
+                {/* Viewport Actions: Zoom & Fullscreen */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={zoomOut}
+                    className="p-1 rounded border border-rule bg-paper hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
+                    title="Zoom Out"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="px-1 text-[10px] text-ink-faint tabular-nums">
+                    {Math.round(zoomScale * 100)}%
+                  </span>
+                  <button
+                    onClick={zoomIn}
+                    className="p-1 rounded border border-rule bg-paper hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
+                    title="Zoom In"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setFullscreenModalOpen(true)}
+                    className="p-1 ml-1 rounded border border-rule bg-paper hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
+                    title="Fullscreen Preview"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
-            ) : (
-              // File Selected & Inspected
-              <div className="space-y-6">
-                {/* File Overview Card */}
-                <div className="p-4 rounded-xl bg-paper border border-rule flex items-center justify-between">
-                  <div className="flex items-center space-x-3.5 truncate">
-                    <div className="w-10 h-10 rounded-lg bg-kraft border border-rule flex items-center justify-center text-ink shrink-0">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                    <div className="truncate">
-                      <h4 className="text-sm font-bold text-ink truncate" title={file.name}>
-                        {file.name}
-                      </h4>
-                      <p className="text-xs text-ink-faint font-mono">
-                        {formatBytes(file.size)} • {inspectionResult?.page_count ? `${inspectionResult.page_count} pages` : 'Analyzing page count...'}
-                      </p>
-                    </div>
+
+              {/* Folio Easel Mat */}
+              <div className="relative bg-kraft/40 border border-rule/70 rounded p-4 sm:p-6 min-h-[380px] sm:min-h-[460px] flex items-center justify-center overflow-auto">
+                {previewLoading && (
+                  <div className="absolute inset-0 z-10 bg-vellum/70 backdrop-blur-xs flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-cyan" />
+                    <span className="text-xs font-mono text-ink-soft">Rendering folio preview...</span>
+                  </div>
+                )}
+
+                {previewError ? (
+                  <div className="text-center p-6 text-xs text-ink-soft max-w-xs">
+                    <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-marigold" />
+                    <p>{previewError}</p>
+                  </div>
+                ) : (
+                  <div className="relative inline-block max-w-full">
+                    {/* Rendered Canvas Sheet */}
+                    <canvas
+                      ref={canvasRef}
+                      className="max-w-full h-auto rounded border border-rule/60 bg-white shadow-ink-lift transition-transform duration-150"
+                    />
+
+                    {/* LIVE SCANNING BEAM ANIMATION (Visible when processing) */}
+                    {isProcessing && (
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded">
+                        <div className="absolute left-0 right-0 h-1 bg-gradient-to-r from-cyan/20 via-cyan to-cyan/20 shadow-[0_0_12px_rgba(39,70,122,0.8)] animate-ocr-scan" />
+                        <div className="absolute top-2.5 right-2.5 bg-ink/85 text-paper text-[10px] font-mono px-2 py-0.5 rounded shadow flex items-center gap-1.5 backdrop-blur-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan animate-ping" />
+                          <span>OPTICAL SCAN ACTIVE</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Page Navigation Controls */}
+              {numPages > 1 && (
+                <div className="flex items-center justify-between pt-2 border-t border-rule text-xs font-mono text-ink-soft">
+                  <button
+                    onClick={prevPage}
+                    disabled={currentPage <= 1 || isProcessing}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-rule bg-paper hover:bg-kraft disabled:opacity-40 transition-colors"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" /> Previous Page
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    {Array.from({ length: Math.min(numPages, 7) }, (_, idx) => {
+                      const pageIdx = idx + 1;
+                      return (
+                        <button
+                          key={pageIdx}
+                          onClick={() => setCurrentPage(pageIdx)}
+                          disabled={isProcessing}
+                          className={`w-6 h-6 rounded text-[11px] font-mono transition-colors ${
+                            currentPage === pageIdx
+                              ? 'bg-ink text-paper font-semibold'
+                              : 'bg-paper border border-rule hover:bg-kraft text-ink-soft'
+                          }`}
+                        >
+                          {pageIdx}
+                        </button>
+                      );
+                    })}
+                    {numPages > 7 && (
+                      <span className="text-ink-faint text-[10px] px-1">... {numPages}</span>
+                    )}
                   </div>
 
                   <button
-                    onClick={handleReset}
-                    className="p-2 text-ink-soft hover:text-red transition-colors"
-                    title="Remove file and choose another"
+                    onClick={nextPage}
+                    disabled={currentPage >= numPages || isProcessing}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-rule bg-paper hover:bg-kraft disabled:opacity-40 transition-colors"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    Next Page <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
+              )}
+            </div>
 
-                {/* Digital Text Pre-Flight Inspection Status */}
+            {/* RIGHT COLUMN: ACTION & TELEMETRY DESK (5 Cols) */}
+            <div className="lg:col-span-5 space-y-4">
+              {/* 1. Folio Dossier Card */}
+              <div className="bg-vellum border border-rule rounded-md p-4 sm:p-5 shadow-subtle space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 truncate">
+                    <div className="w-9 h-9 rounded border border-rule bg-kraft/70 flex items-center justify-center text-ink shrink-0 mt-0.5">
+                      <FileText className="w-5 h-5 text-cyan" />
+                    </div>
+                    <div className="truncate">
+                      <h3
+                        className="font-display font-semibold text-sm text-ink truncate"
+                        title={file.name}
+                      >
+                        {file.name}
+                      </h3>
+                      <div className="flex items-center gap-2 text-[11px] font-mono text-ink-faint mt-0.5">
+                        <span>{formatBytes(file.size)}</span>
+                        <span>•</span>
+                        <span>
+                          {numPages > 1 ? `${numPages} Pages` : `${numPages} Page`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!isProcessing && (
+                    <button
+                      onClick={handleReset}
+                      className="p-1.5 rounded border border-rule bg-paper hover:bg-red/10 hover:text-red hover:border-red/30 text-ink-soft transition-colors shrink-0"
+                      title="Remove folio and choose another"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Pre-Flight Inspection Diagnostic */}
                 {isInspecting ? (
-                  <div className="p-4 rounded-xl bg-cyan/5 border border-cyan/20 flex items-center space-x-3 text-xs text-cyan">
+                  <div className="p-3 rounded bg-cyan/5 border border-cyan/20 flex items-center space-x-2.5 text-xs text-cyan">
                     <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                    <span>Analyzing document structure for existing digital text...</span>
+                    <span className="font-mono text-[11px]">
+                      Analyzing page structure for existing digital text...
+                    </span>
                   </div>
                 ) : inspectionResult ? (
                   inspectionResult.has_digital_text ? (
-                    // Document ALREADY contains text!
-                    <div className="p-5 rounded-xl bg-marigold/15 border border-marigold/40 text-xs text-ink space-y-3">
-                      <div className="flex items-start space-x-2.5">
-                        <AlertTriangle className="w-5 h-5 text-marigold shrink-0 mt-0.5" />
+                    <div className="p-3.5 rounded bg-marigold/15 border border-marigold/40 text-xs text-ink space-y-2.5">
+                      <div className="flex items-start space-x-2">
+                        <AlertTriangle className="w-4 h-4 text-marigold shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-bold text-sm text-ink">
+                          <p className="font-bold text-xs text-ink">
                             Searchable Text Already Detected
                           </p>
-                          <p className="text-ink-soft mt-1 leading-relaxed">
+                          <p className="text-ink-soft text-[11px] mt-0.5 leading-relaxed">
                             {inspectionResult.message}
                           </p>
                         </div>
                       </div>
 
-                      {/* Force OCR Checkbox */}
-                      <label className="flex items-center space-x-2.5 pt-2 border-t border-marigold/30 cursor-pointer select-none">
+                      <label className="flex items-start space-x-2 pt-2 border-t border-marigold/30 cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={forceOcr}
                           onChange={(e) => setForceOcr(e.target.checked)}
-                          className="w-4 h-4 rounded border-rule text-cyan focus:ring-cyan"
+                          disabled={isProcessing}
+                          className="w-4 h-4 rounded border-rule text-cyan focus:ring-cyan mt-0.5"
                         />
-                        <span className="font-semibold text-xs text-ink">
-                          Force OCR: Proceed with full OCRmyPDF + Tesseract re-scan anyway (useful for mixed handwriting or faded scans)
+                        <span className="font-medium text-[11px] text-ink leading-snug">
+                          Force OCR: Proceed with full optical transcription pass (useful for mixed handwriting or faint scans)
                         </span>
                       </label>
                     </div>
                   ) : (
-                    // Scanned document without text
-                    <div className="p-4 rounded-xl bg-moss/10 border border-moss/30 text-xs text-moss flex items-center space-x-2.5">
+                    <div className="p-3 rounded bg-moss/10 border border-moss/30 text-xs text-moss flex items-center space-x-2">
                       <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      <span>
-                        Verified Scanned Document: No embedded digital text detected. Ready for OCRmyPDF + Tesseract OCR.
+                      <span className="font-medium text-[11px]">
+                        Verified Scanned Document: Pure image plate without text. Perfectly suited for optical character recognition.
                       </span>
                     </div>
                   )
                 ) : null}
+              </div>
 
-                {/* Submit Action */}
-                <div className="flex items-center justify-between pt-4 border-t border-rule">
-                  <button
-                    onClick={handleReset}
-                    className="text-xs font-semibold text-ink-soft hover:text-ink transition-colors"
-                  >
-                    Cancel
-                  </button>
+              {/* 2. Processing Pipeline Telemetry (Shown during processing or completion) */}
+              {(isProcessing || isCompleted) && currentJob && (
+                <div className="bg-vellum border border-rule rounded-md p-4 sm:p-5 shadow-subtle space-y-4 animate-fade-in">
+                  <div>
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-cyan font-semibold uppercase tracking-mono">
+                        {currentJob.status}
+                      </span>
+                      <span className="text-ink-faint tabular-nums">
+                        {currentJob.progress || (isCompleted ? 100 : 10)}%
+                      </span>
+                    </div>
 
-                  <button
-                    onClick={handleStartOCR}
-                    disabled={isInspecting}
-                    className="inline-flex items-center px-6 py-3 rounded-xl bg-cyan hover:bg-cyan/90 text-white font-bold text-sm shadow-md transition-all disabled:opacity-50"
-                  >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Make PDF Searchable
-                  </button>
+                    <h4 className="font-display text-base font-semibold text-ink mt-1">
+                      {STAGE_LABELS[currentJob.processing_stage] || 'Processing Document...'}
+                    </h4>
+                  </div>
+
+                  {/* Smooth Progress Bar */}
+                  <div className="w-full bg-kraft h-2 rounded overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ease-out ${
+                        isCompleted ? 'bg-moss' : 'bg-cyan'
+                      }`}
+                      style={{
+                        width: `${isCompleted ? 100 : Math.max(8, currentJob.progress || 10)}%`,
+                      }}
+                    />
+                  </div>
+
+                  {/* 4 Pipeline Milestones */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 text-left text-xs font-mono">
+                    <div
+                      className={`p-2.5 rounded border ${
+                        currentJob.progress >= 20 || isCompleted
+                          ? 'bg-moss/10 border-moss/30 text-moss'
+                          : 'bg-paper border-rule text-ink-faint'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center text-[11px]">
+                        {currentJob.progress >= 20 || isCompleted ? (
+                          <Check className="w-3.5 h-3.5 mr-1" />
+                        ) : (
+                          <span className="mr-1">1.</span>
+                        )}
+                        Ingestion
+                      </div>
+                      <div className="text-[10px] mt-0.5 opacity-80">Encrypted upload</div>
+                    </div>
+
+                    <div
+                      className={`p-2.5 rounded border ${
+                        currentJob.progress >= 40 || isCompleted
+                          ? 'bg-cyan/10 border-cyan/30 text-cyan'
+                          : 'bg-paper border-rule text-ink-faint'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center text-[11px]">
+                        {currentJob.progress >= 75 || isCompleted ? (
+                          <Check className="w-3.5 h-3.5 mr-1" />
+                        ) : (
+                          <span className="mr-1">2.</span>
+                        )}
+                        Recognition
+                      </div>
+                      <div className="text-[10px] mt-0.5 opacity-80">Text & layout matrix</div>
+                    </div>
+
+                    <div
+                      className={`p-2.5 rounded border ${
+                        currentJob.progress >= 80 || isCompleted
+                          ? 'bg-cyan/10 border-cyan/30 text-cyan'
+                          : 'bg-paper border-rule text-ink-faint'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center text-[11px]">
+                        {currentJob.progress >= 90 || isCompleted ? (
+                          <Check className="w-3.5 h-3.5 mr-1" />
+                        ) : (
+                          <span className="mr-1">3.</span>
+                        )}
+                        Text Layer
+                      </div>
+                      <div className="text-[10px] mt-0.5 opacity-80">Coordinate injection</div>
+                    </div>
+
+                    <div
+                      className={`p-2.5 rounded border ${
+                        isCompleted
+                          ? 'bg-moss/10 border-moss/30 text-moss'
+                          : 'bg-paper border-rule text-ink-faint'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center text-[11px]">
+                        {isCompleted ? (
+                          <Check className="w-3.5 h-3.5 mr-1" />
+                        ) : (
+                          <span className="mr-1">4.</span>
+                        )}
+                        Ready
+                      </div>
+                      <div className="text-[10px] mt-0.5 opacity-80">Searchable PDF</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
 
-        {/* VIEW 2: ACTIVE PROCESSING PIPELINE */}
-        {isProcessing && currentJob && (
-          <div className="py-8 px-4 text-center space-y-6">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-cyan/10 border border-cyan/30 flex items-center justify-center text-cyan shadow-sm">
-              <Loader2 className="w-8 h-8 animate-spin" />
-            </div>
+              {/* 3. Action Panel: Generate or Download */}
+              <div className="bg-vellum border border-rule rounded-md p-4 sm:p-5 shadow-subtle space-y-4">
+                {!isProcessing && !isCompleted && (
+                  <div className="space-y-4">
+                    <div className="space-y-2 text-xs font-mono text-ink-soft">
+                      <div className="flex justify-between pb-1.5 border-b border-rule">
+                        <span className="text-ink-faint">OUTPUT FORMAT</span>
+                        <span className="font-semibold text-ink">Dual-Layer Searchable PDF</span>
+                      </div>
+                      <div className="flex justify-between pb-1.5 border-b border-rule">
+                        <span className="text-ink-faint">PAGE FIDELITY</span>
+                        <span className="font-semibold text-ink">100% Unaltered Scan Plate</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-ink-faint">SEARCH CAPABILITY</span>
+                        <span className="font-semibold text-cyan">Ctrl+F & Select Ready</span>
+                      </div>
+                    </div>
 
-            <div>
-              <span className="text-xs font-mono uppercase tracking-wider text-cyan font-bold">
-                STAGE: {currentJob.processing_stage}
-              </span>
-              <h3 className="text-xl font-bold text-ink mt-1 font-serif">
-                {STAGE_LABELS[currentJob.processing_stage] || 'Processing with OCRmyPDF + Tesseract...'}
-              </h3>
-              <p className="text-xs text-ink-soft mt-1.5 font-mono">
-                Document: {file?.name || currentJob.original_filename}
-              </p>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="max-w-md mx-auto space-y-2">
-              <div className="w-full bg-kraft h-2.5 rounded-full overflow-hidden">
-                <div
-                  className="bg-cyan h-full rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${Math.max(8, currentJob.progress || 10)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[11px] font-mono text-ink-faint">
-                <span>OCR Pipeline</span>
-                <span>{currentJob.progress || 10}%</span>
-              </div>
-            </div>
-
-            {/* 4 Pipeline Milestones */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto pt-6 text-left">
-              <div className={`p-3 rounded-lg border text-xs ${
-                currentJob.progress >= 20 ? 'bg-moss/10 border-moss/30 text-moss' : 'bg-paper border-rule text-ink-faint'
-              }`}>
-                <div className="font-bold flex items-center">
-                  {currentJob.progress >= 20 ? <Check className="w-3.5 h-3.5 mr-1" /> : <span className="w-3.5 h-3.5 mr-1">1.</span>}
-                  S3 Ingestion
-                </div>
-                <div className="text-[10px] mt-0.5 opacity-80">Encrypted raw upload</div>
-              </div>
-
-              <div className={`p-3 rounded-lg border text-xs ${
-                currentJob.progress >= 40 ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-paper border-rule text-ink-faint'
-              }`}>
-                <div className="font-bold flex items-center">
-                  {currentJob.progress >= 75 ? <Check className="w-3.5 h-3.5 mr-1" /> : <span className="w-3.5 h-3.5 mr-1">2.</span>}
-                  Tesseract OCR
-                </div>
-                <div className="text-[10px] mt-0.5 opacity-80">OCRmyPDF engine</div>
-              </div>
-
-              <div className={`p-3 rounded-lg border text-xs ${
-                currentJob.progress >= 80 ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-paper border-rule text-ink-faint'
-              }`}>
-                <div className="font-bold flex items-center">
-                  {currentJob.progress >= 90 ? <Check className="w-3.5 h-3.5 mr-1" /> : <span className="w-3.5 h-3.5 mr-1">3.</span>}
-                  Invisible Layer
-                </div>
-                <div className="text-[10px] mt-0.5 opacity-80">Searchable PDF/A</div>
-              </div>
-
-              <div className={`p-3 rounded-lg border text-xs ${
-                currentJob.progress >= 100 ? 'bg-moss/10 border-moss/30 text-moss' : 'bg-paper border-rule text-ink-faint'
-              }`}>
-                <div className="font-bold flex items-center">
-                  {currentJob.progress >= 100 ? <Check className="w-3.5 h-3.5 mr-1" /> : <span className="w-3.5 h-3.5 mr-1">4.</span>}
-                  Ready
-                </div>
-                <div className="text-[10px] mt-0.5 opacity-80">Downloadable PDF</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* VIEW 3: COMPLETION & DOWNLOAD */}
-        {currentJob && currentJob.status === 'COMPLETED' && (
-          <div className="space-y-6 py-2">
-            <div className="p-6 rounded-xl bg-moss/10 border border-moss/30 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center space-x-3.5">
-                <div className="w-12 h-12 rounded-xl bg-moss text-paper flex items-center justify-center shrink-0 shadow-md">
-                  <CheckCircle2 className="w-7 h-7" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-ink">
-                    Searchable PDF Successfully Generated!
-                  </h3>
-                  <p className="text-xs text-ink-soft mt-0.5">
-                    Original scanned pages preserved. Machine-readable invisible text layer injected via OCRmyPDF + Tesseract.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => handleDownload(currentJob.job_id, currentJob.original_filename)}
-                disabled={isDownloading}
-                className="inline-flex items-center px-6 py-3 rounded-xl bg-moss hover:bg-moss/90 text-paper font-bold text-sm shadow-md transition-all shrink-0"
-              >
-                {isDownloading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Downloading...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4 mr-2" /> Download Searchable PDF
-                  </>
+                    <button
+                      onClick={handleStartOCR}
+                      disabled={isInspecting}
+                      className="w-full inline-flex items-center justify-center px-5 py-3 rounded bg-red hover:bg-red-dark text-paper font-sans font-semibold text-sm shadow-ink-red transition-all disabled:opacity-50 min-h-[44px]"
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Make PDF Searchable
+                    </button>
+                  </div>
                 )}
-              </button>
-            </div>
 
-            {/* Verification Specs Table */}
-            <div className="p-5 rounded-xl bg-paper border border-rule grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
-              <div>
-                <span className="text-ink-faint block text-[10px] uppercase">Original File</span>
-                <span className="font-bold text-ink truncate block mt-0.5" title={currentJob.original_filename}>
-                  {currentJob.original_filename}
-                </span>
-                <span className="text-ink-soft text-[11px]">{formatBytes(currentJob.file_size_bytes)}</span>
+                {isCompleted && (
+                  <div className="space-y-4">
+                    <div className="p-3 rounded bg-moss/10 border border-moss/30 text-xs text-moss space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Searchable PDF Ready</span>
+                      </div>
+                      <p className="text-[11px] text-ink-soft leading-normal">
+                        Machine-readable invisible text layer has been injected with exact glyph alignment.
+                      </p>
+                    </div>
+
+                    {/* Download Button */}
+                    <button
+                      onClick={() => handleDownload(currentJob.job_id, currentJob.original_filename)}
+                      disabled={isDownloading}
+                      className="w-full inline-flex items-center justify-center px-5 py-3 rounded bg-moss hover:bg-moss/90 text-paper font-sans font-semibold text-sm shadow-ink-button transition-all shrink-0 min-h-[44px]"
+                    >
+                      {isDownloading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Downloading...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 mr-2" /> Download Searchable PDF
+                        </>
+                      )}
+                    </button>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-rule text-xs font-mono">
+                      <span className="text-ink-faint text-[11px]">
+                        {isAuthenticated ? 'Saved to member vault.' : 'Guest file valid for 24h.'}
+                      </span>
+                      <button
+                        onClick={handleReset}
+                        className="text-cyan hover:underline inline-flex items-center text-[11px] font-semibold"
+                      >
+                        <RefreshCw className="w-3 h-3 mr-1" /> Process Another
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              <div>
-                <span className="text-ink-faint block text-[10px] uppercase">Searchable PDF</span>
-                <span className="font-bold text-ink truncate block mt-0.5">
-                  searchable_{currentJob.original_filename}
-                </span>
-                <span className="text-ink-soft text-[11px]">{formatBytes(currentJob.output_file_size_bytes)}</span>
-              </div>
-
-              <div>
-                <span className="text-ink-faint block text-[10px] uppercase">Page Count</span>
-                <span className="font-bold text-ink block mt-0.5">
-                  {currentJob.page_count} Pages
-                </span>
-                <span className="text-moss font-semibold text-[11px]">100% OCR Processed</span>
-              </div>
-
-              <div>
-                <span className="text-ink-faint block text-[10px] uppercase">Search Capabilities</span>
-                <span className="font-bold text-cyan block mt-0.5">
-                  Ctrl+F & Select Ready
-                </span>
-                <span className="text-ink-soft text-[11px]">Invisible Mode 3</span>
-              </div>
-            </div>
-
-            {/* Action to process another file */}
-            <div className="flex justify-between items-center pt-2">
-              <span className="text-xs text-ink-faint">
-                {isAuthenticated ? 'Saved in your member vault.' : 'Guest file expires in 24 hours.'}
-              </span>
-              <button
-                onClick={handleReset}
-                className="text-xs font-bold text-cyan hover:underline inline-flex items-center"
-              >
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Process Another Document
-              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* RECENT OCR LEDGER */}
+      {/* RECENT OCR HISTORY */}
       {recentJobs.length > 0 && (
         <div className="mt-12">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-ink font-serif uppercase tracking-wider flex items-center">
+            <h3 className="text-sm font-semibold text-ink font-display uppercase tracking-mono flex items-center">
               <Clock className="w-4 h-4 mr-2 text-cyan" /> Recent OCR History
             </h3>
             <button
@@ -621,7 +876,7 @@ export const OCRStudio = () => {
             </button>
           </div>
 
-          <div className="bg-vellum border border-rule rounded-xl overflow-hidden shadow-sm">
+          <div className="bg-vellum border border-rule rounded-md overflow-hidden shadow-subtle">
             <table className="w-full text-left text-xs font-mono">
               <thead className="bg-kraft/60 border-b border-rule text-ink-soft">
                 <tr>
@@ -634,18 +889,23 @@ export const OCRStudio = () => {
               <tbody className="divide-y divide-rule/60">
                 {recentJobs.map((j) => (
                   <tr key={j.job_id} className="hover:bg-paper/60 transition-colors">
-                    <td className="py-3 px-4 text-ink font-sans font-medium truncate max-w-[200px]" title={j.filename}>
+                    <td
+                      className="py-3 px-4 text-ink font-sans font-medium truncate max-w-[220px]"
+                      title={j.filename}
+                    >
                       {j.filename}
                     </td>
                     <td className="py-3 px-4 text-ink-soft">{j.page_count}</td>
                     <td className="py-3 px-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        j.status === 'COMPLETED'
-                          ? 'bg-moss/10 text-moss border border-moss/20'
-                          : j.status === 'FAILED'
-                          ? 'bg-red/10 text-red border border-red/20'
-                          : 'bg-cyan/10 text-cyan border border-cyan/20 animate-pulse'
-                      }`}>
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                          j.status === 'COMPLETED'
+                            ? 'bg-moss/10 text-moss border border-moss/20'
+                            : j.status === 'FAILED'
+                            ? 'bg-red/10 text-red border border-red/20'
+                            : 'bg-cyan/10 text-cyan border border-cyan/20 animate-pulse'
+                        }`}
+                      >
                         {j.status}
                       </span>
                     </td>
@@ -667,6 +927,24 @@ export const OCRStudio = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {/* FULLSCREEN MODAL (Opens DocumentPreviewModal when requested) */}
+      {fullscreenModalOpen && file && (
+        <DocumentPreviewModal
+          file={{
+            original_filename: isCompleted
+              ? `searchable_${file.name}`
+              : file.name,
+            download_url: isCompleted && currentJob?.job_id
+              ? `/api/v1/ocr/jobs/${currentJob.job_id}/download`
+              : null,
+            file_size_bytes: file.size,
+            output_file_size_bytes: currentJob?.output_file_size_bytes,
+            created_at: new Date().toISOString(),
+          }}
+          onClose={() => setFullscreenModalOpen(false)}
+        />
       )}
     </div>
   );

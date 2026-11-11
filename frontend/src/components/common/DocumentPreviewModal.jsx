@@ -492,10 +492,10 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
                 <div className="pt-2 border-t border-rule space-y-1.5">
                   <div className="flex items-center gap-1.5 text-moss text-[11px]">
                     <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                    <span>AES-256 S3 Storage</span>
+                    <span>AES-256 Encrypted Cloud Storage</span>
                   </div>
                   <p className="text-[10px] text-ink-soft leading-normal">
-                    Isolated client storage protected by AWS IAM scoped policy and Cognito token authentication.
+                    Isolated client storage protected by cryptographic token authentication and end-to-end encryption.
                   </p>
                 </div>
 

@@ -302,7 +302,7 @@ export default function WorkflowStudio() {
     setNotification(`Loaded saved blueprint '${wf.name}'.`);
   };
 
-  // Save Pipeline to PostgreSQL
+  // Save Pipeline to Account Vault
   const handleSavePipeline = async () => {
     if (!isAuthenticated) {
       setNotification('Please sign in to save custom pipelines.');
@@ -514,7 +514,7 @@ export default function WorkflowStudio() {
               <div>
                 <p className="text-xs font-semibold text-ink">Member Feature: Cloud Pipeline Blueprints</p>
                 <p className="text-[11px] text-ink-soft">
-                  Sign in to save custom pipelines to PostgreSQL, store parameters, and automate document archives.
+                  Sign in to save custom pipelines to your account, store parameters, and automate document archives.
                 </p>
               </div>
             </div>
@@ -1031,14 +1031,14 @@ export default function WorkflowStudio() {
           </div>
         )}
 
-        {/* TAB 3: SAVED WORKFLOWS FROM POSTGRESQL */}
+        {/* TAB 3: SAVED WORKFLOWS */}
         {activeTab === 'saved' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-rule">
               <div>
                 <h2 className="text-xs font-semibold text-ink">My Saved Pipelines</h2>
                 <p className="text-[10px] font-mono text-ink-soft">
-                  Pipelines persisted in PostgreSQL across devices
+                  Pipelines saved across all your sessions and devices
                 </p>
               </div>
               <button

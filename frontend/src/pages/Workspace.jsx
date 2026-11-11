@@ -380,7 +380,7 @@ export default function Workspace() {
             </div>
             <div className="text-[11px] font-mono text-moss flex items-center gap-1.5 pt-1">
               <span className="w-1.5 h-1.5 rounded-full bg-moss"></span>
-              <span>Encrypted AWS Cognito Session</span>
+              <span>Encrypted Member Session</span>
             </div>
           </div>
 
