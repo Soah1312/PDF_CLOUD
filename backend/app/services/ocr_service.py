@@ -256,7 +256,7 @@ class OCRmyPDFEngine:
                     raise RuntimeError(f"OCR processing failed: {err_detail}")
 
             if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
-                raise RuntimeError("OCRmyPDF did not produce a valid output PDF file.")
+                raise RuntimeError("Optical recognition pipeline did not produce a valid output PDF file.")
 
             with open(output_file, "rb") as f:
                 output_bytes = f.read()

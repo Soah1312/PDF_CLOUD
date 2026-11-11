@@ -112,7 +112,7 @@ async def inspect_pdf(
     return inspection
 
 
-@router.post("/searchable", summary="Create Searchable PDF via OCRmyPDF & Tesseract")
+@router.post("/searchable", summary="Create Searchable PDF via Dual-Layer Optical Recognition")
 async def create_searchable_pdf(
     response: Response,
     background_tasks: BackgroundTasks,
@@ -126,7 +126,7 @@ async def create_searchable_pdf(
 ):
     session_id = x_session_id or x_guest_session_id
     """
-    Submits a PDF for OCR processing using OCRmyPDF and Tesseract.
+    Submits a PDF for optical character recognition processing.
     If the document already contains selectable digital text and force_ocr is False,
     returns an advisory response allowing the user to confirm.
     Otherwise, enqueues the job and starts asynchronous pipeline processing.
@@ -167,7 +167,7 @@ async def create_searchable_pdf(
             "page_count": num_pages,
             "message": (
                 f"This PDF already appears to contain searchable text ({inspection['detected_words']} words detected). "
-                "To force full OCR re-scanning with OCRmyPDF + Tesseract, enable the 'Force OCR' option."
+                "To force full OCR re-scanning, enable the 'Force OCR' option."
             ),
         }
 
@@ -193,7 +193,7 @@ async def create_searchable_pdf(
         original_filename=filename,
         original_s3_key=raw_s3_key,
         output_s3_key=processed_s3_key,
-        ocr_engine="ocrmypdf",
+        ocr_engine="cloudpdf_dual_layer",
         language=language or "eng",
         page_count=num_pages,
         file_size_bytes=len(content),
@@ -219,7 +219,7 @@ async def create_searchable_pdf(
         progress=ocr_job.progress,
         has_digital_text=has_digital_text,
         page_count=num_pages,
-        message="OCR job successfully queued for OCRmyPDF + Tesseract processing.",
+        message="OCR job successfully queued for optical character recognition processing.",
         guest_session_id=guest_session,
     )
 

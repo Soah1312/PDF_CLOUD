@@ -126,8 +126,13 @@ export default {
       }
     }
 
-    // Serve static SPA assets from ./dist
-    return env.ASSETS.fetch(request);
+    // Serve static SPA assets from ./dist with SPA fallback
+    let response = await env.ASSETS.fetch(request);
+    if (response.status === 404 && request.method === 'GET') {
+      const fallbackReq = new Request(new URL('/', request.url), request);
+      response = await env.ASSETS.fetch(fallbackReq);
+    }
+    return response;
   },
 };
 
