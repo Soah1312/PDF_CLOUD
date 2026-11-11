@@ -129,7 +129,8 @@ export default {
     // Serve static SPA assets from ./dist with SPA fallback
     let response = await env.ASSETS.fetch(request);
     if (response.status === 404 && request.method === 'GET') {
-      const fallbackReq = new Request(new URL('/', request.url), request);
+      const fallbackUrl = new URL('/index.html', request.url);
+      const fallbackReq = new Request(fallbackUrl.toString(), request);
       response = await env.ASSETS.fetch(fallbackReq);
     }
     return response;
