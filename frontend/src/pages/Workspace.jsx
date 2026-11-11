@@ -37,6 +37,7 @@ import {
   X,
   FileCheck,
   Eye,
+  Archive,
 } from 'lucide-react';
 import { renderPdfThumbnail } from '../utils/pdfThumbnails';
 import DocumentPreviewModal from '../components/common/DocumentPreviewModal';
@@ -47,6 +48,20 @@ function formatBytes(bytes) {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function resolveDownloadFilename(file) {
+  if (!file) return 'document.pdf';
+  const name = file.original_filename || 'document';
+  const action = (file.action_type || '').toUpperCase();
+  const base = name.replace(/\.[^/.]+$/, '');
+  if (action === 'PDF_TO_IMAGES' || action === 'TO-IMAGES' || name.toLowerCase().endsWith('.zip')) {
+    return name.toLowerCase().endsWith('.zip') ? name : `${base}_images.zip`;
+  }
+  if (action === 'TO_WORD' || action === 'PDF_TO_WORD' || action === 'TO-WORD' || name.toLowerCase().endsWith('.docx')) {
+    return name.toLowerCase().endsWith('.docx') ? name : `${base}.docx`;
+  }
+  return name;
 }
 
 const ACTION_LABELS = {
@@ -593,7 +608,11 @@ export default function Workspace() {
                           className="w-10 h-14 rounded border border-rule bg-paper shadow-sm flex items-center justify-center shrink-0 overflow-hidden hover:border-ink transition-colors cursor-pointer group"
                           title="Click to preview folio"
                         >
-                          <FileText className="w-4 h-4 text-ink-faint group-hover:text-ink transition-colors" />
+                          {(file.action_type || '').toUpperCase().includes('IMAGE') ? (
+                            <Archive className="w-4 h-4 text-cyan group-hover:scale-110 transition-transform" />
+                          ) : (
+                            <FileText className="w-4 h-4 text-ink-faint group-hover:text-ink transition-colors" />
+                          )}
                         </button>
 
                         {/* Document Title & Action Metadata - Tap to Preview */}
@@ -645,7 +664,7 @@ export default function Workspace() {
                           {file.download_url && (
                             <a
                               href={file.download_url}
-                              download={file.original_filename}
+                              download={resolveDownloadFilename(file)}
                               className="p-2 sm:p-1.5 rounded border border-rule bg-paper hover:bg-kraft active:bg-kraft/80 text-ink transition-colors min-w-[44px] min-h-[44px] sm:min-w-[34px] sm:min-h-[34px] flex items-center justify-center touch-target"
                               title="Download Folio"
                             >

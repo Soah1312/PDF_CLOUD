@@ -81,7 +81,7 @@ function AppContent() {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-1 relative z-10">
+      <main className="flex-1 relative">
         <Routes>
           {/* Public & Guest Accessible Routes */}
           <Route path="/" element={<Home />} />

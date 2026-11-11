@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Download,
@@ -17,6 +18,7 @@ import {
   Calendar,
   HardDrive,
   Check,
+  Archive,
 } from 'lucide-react';
 import { loadPdfDocument, renderPdfPageToCanvas } from '../../utils/pdfThumbnails';
 
@@ -43,9 +45,36 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
   const touchStartXRef = useRef(null);
 
   const filename = file?.original_filename || 'document.pdf';
-  const isPdf = filename.toLowerCase().endsWith('.pdf') || file?.action_type !== 'to-word';
-  const isImage = /\.(png|jpe?g|webp|gif)$/i.test(filename);
-  const isDocx = /\.docx?$/i.test(filename);
+  const actionType = (file?.action_type || '').toUpperCase();
+
+  // Robust format detection based on extension, MIME, and action_type
+  const isZip =
+    /\.zip$/i.test(filename) ||
+    actionType === 'PDF_TO_IMAGES' ||
+    actionType === 'TO-IMAGES' ||
+    file?.content_type === 'application/zip';
+
+  const isDocx =
+    /\.docx?$/i.test(filename) ||
+    actionType === 'TO_WORD' ||
+    actionType === 'PDF_TO_WORD' ||
+    actionType === 'TO-WORD';
+
+  const isImage =
+    !isZip && !isDocx &&
+    (/\.(png|jpe?g|webp|gif|svg)$/i.test(filename) || file?.content_type?.startsWith('image/'));
+
+  const isPdf =
+    !isZip && !isDocx && !isImage &&
+    (filename.toLowerCase().endsWith('.pdf') || file?.content_type === 'application/pdf' || !file?.action_type);
+
+  // Compute clean download filename for non-PDF archives
+  const baseName = filename.replace(/\.[^/.]+$/, '');
+  const downloadFilename = isZip
+    ? filename.toLowerCase().endsWith('.zip') ? filename : `${baseName}_images.zip`
+    : isDocx
+    ? filename.toLowerCase().endsWith('.docx') ? filename : `${baseName}.docx`
+    : filename;
 
   // Compute best download/preview URL
   const resolvedUrl = file?.download_url || (file?.id ? `/api/v1/files/${file.id}/download` : null);
@@ -191,18 +220,18 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
     }
   };
 
-  return (
+  const modalContent = (
     <div
       role="dialog"
       aria-modal="true"
       aria-label={`Document preview for ${filename}`}
-      className="fixed inset-0 z-50 bg-ink/70 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 md:p-6 animate-fade-in"
+      className="fixed inset-0 z-[100] bg-ink/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 md:p-8 animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="relative flex flex-col w-full h-[100dvh] sm:h-[92vh] sm:max-w-5xl rounded-none sm:rounded-md bg-paper border-0 sm:border sm:border-rule shadow-elevation overflow-hidden"
+        className="relative flex flex-col w-full max-h-[88vh] sm:max-h-[90vh] sm:max-w-5xl rounded-md bg-paper border border-rule shadow-elevation overflow-hidden my-auto"
         style={{
           paddingTop: 'env(safe-area-inset-top, 0px)',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
@@ -212,18 +241,22 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
         <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 border-b border-rule bg-vellum shrink-0 gap-2 sm:gap-4">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className="w-8 h-8 rounded border border-rule bg-paper flex items-center justify-center shrink-0 text-ink-soft">
-              <FileText className="w-4 h-4" strokeWidth={1.5} />
+              {isZip ? (
+                <Archive className="w-4 h-4 text-cyan" strokeWidth={1.5} />
+              ) : (
+                <FileText className="w-4 h-4" strokeWidth={1.5} />
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <h2
                 className="font-display text-sm sm:text-base font-semibold text-ink truncate leading-tight"
-                title={filename}
+                title={downloadFilename}
               >
-                {filename}
+                {downloadFilename}
               </h2>
               <div className="flex items-center gap-2 text-[10px] font-mono text-ink-soft tracking-mono mt-0.5">
                 <span className="uppercase px-1.5 py-0.2 rounded bg-kraft border border-rule">
-                  {file?.action_type || 'ARCHIVE'}
+                  {file?.action_type || (isZip ? 'ZIP ARCHIVE' : isDocx ? 'DOCX' : 'PDF')}
                 </span>
                 <span className="tabular-nums">
                   {formatBytes(file?.output_file_size_bytes || file?.file_size_bytes)}
@@ -269,7 +302,7 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
             {resolvedUrl && (
               <a
                 href={resolvedUrl}
-                download={filename}
+                download={downloadFilename}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-red text-vellum hover:bg-red-dark text-xs font-semibold font-mono tracking-mono transition-colors shadow-ink-button min-h-[40px]"
                 title="Download Folio"
               >
@@ -364,21 +397,52 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
             )}
 
             {error && (
-              <div className="max-w-md p-6 rounded border border-rule bg-vellum text-center space-y-3 shadow-subtle">
+              <div className="max-w-md p-6 rounded border border-rule bg-vellum text-center space-y-3 shadow-subtle animate-fade-in">
                 <AlertCircle className="w-8 h-8 text-red mx-auto" strokeWidth={1.5} />
                 <h3 className="font-display text-base text-ink font-semibold">
-                  In-Browser Preview Unavailable
+                  In-Browser Preview Notice
                 </h3>
                 <p className="text-xs text-ink-soft leading-relaxed">{error}</p>
                 {resolvedUrl && (
                   <div className="pt-2">
                     <a
                       href={resolvedUrl}
-                      download={filename}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded bg-red text-vellum hover:bg-red-dark text-xs font-semibold transition-colors"
+                      download={downloadFilename}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded bg-ink text-paper hover:bg-ink-soft text-xs font-semibold transition-colors"
                     >
                       <Download className="w-4 h-4" />
                       <span>Download Folio File</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!loading && !error && isZip && (
+              <div className="max-w-md p-8 rounded border border-rule bg-vellum text-center space-y-4 shadow-subtle animate-fade-in">
+                <div className="w-14 h-14 rounded-full border border-rule bg-paper mx-auto flex items-center justify-center text-cyan shadow-sm">
+                  <Archive className="w-7 h-7" strokeWidth={1.5} />
+                </div>
+                <div className="space-y-1.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-kraft border border-rule text-ink-soft text-[10px] font-mono font-semibold uppercase tracking-mono">
+                    IMAGE PLATES PACKAGE
+                  </span>
+                  <h3 className="font-display text-lg text-ink font-semibold">
+                    Extracted Image Archive
+                  </h3>
+                  <p className="text-xs text-ink-soft leading-relaxed max-w-sm mx-auto">
+                    This folio is stored as a compressed ZIP archive containing individual raster image plates extracted from your PDF document ({filename}).
+                  </p>
+                </div>
+                {resolvedUrl && (
+                  <div className="pt-2">
+                    <a
+                      href={resolvedUrl}
+                      download={downloadFilename}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded bg-ink text-paper hover:bg-ink-soft text-xs font-mono font-semibold transition-colors shadow"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download Image Archive ({formatBytes(file?.output_file_size_bytes || file?.file_size_bytes)})</span>
                     </a>
                   </div>
                 )}
@@ -401,7 +465,7 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
               <div className="max-w-full max-h-full p-2 bg-paper border border-rule shadow-paper rounded flex items-center justify-center">
                 <img
                   src={resolvedUrl}
-                  alt={filename}
+                  alt={downloadFilename}
                   className="max-w-full max-h-[75vh] object-contain rounded"
                 />
               </div>
@@ -424,7 +488,7 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
                   <div className="pt-2">
                     <a
                       href={resolvedUrl}
-                      download={filename}
+                      download={downloadFilename}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded bg-red text-vellum hover:bg-red-dark text-xs font-semibold transition-colors"
                     >
                       <Download className="w-4 h-4" />
@@ -525,7 +589,7 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
           {resolvedUrl && (
             <a
               href={resolvedUrl}
-              download={filename}
+              download={downloadFilename}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded bg-red text-vellum font-semibold text-xs transition-colors shadow-ink-button min-h-[44px]"
             >
               <Download className="w-4 h-4" />
@@ -542,5 +606,8 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(modalContent, document.body);
 }
 
