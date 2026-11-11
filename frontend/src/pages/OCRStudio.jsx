@@ -49,6 +49,59 @@ const STAGE_LABELS = {
   FAILED: 'Processing Failed',
 };
 
+const OCR_FUN_FACTS = [
+  {
+    tag: 'Origins',
+    title: "Emanuel Goldberg's 1914 Invention",
+    fact: 'The earliest ancestor of OCR was patented in 1914 by Emanuel Goldberg, who built a machine that read printed characters and automatically converted them into telegraph code for electrical transmission.',
+  },
+  {
+    tag: 'Assistive Tech',
+    title: 'Ray Kurzweil & Blind Literacy (1974)',
+    fact: 'In 1974, Ray Kurzweil developed the first omni-font OCR software. Coupled with a flatbed scanner and speech synthesizer, it created the first reading machine that allowed visually impaired people to listen to any printed book.',
+  },
+  {
+    tag: 'Architecture',
+    title: 'How Searchable PDFs Actually Work',
+    fact: 'Dual-layer searchable PDFs keep your original scanned page 100% untouched as the visible image plate, while embedding an invisible, machine-readable vector text layer directly beneath each word so you can search and select text seamlessly.',
+  },
+  {
+    tag: 'Postal History',
+    title: 'Reading Handwritten ZIP Codes',
+    fact: 'In November 1965, the United States Postal Service installed the first computerized optical scanner in Detroit. It could read the city, state, and 5-digit ZIP code on up to 36,000 envelopes per hour!',
+  },
+  {
+    tag: 'Banking',
+    title: 'Why Bank Check Fonts Look Unusual',
+    fact: 'The stylized numbers at the bottom of bank checks use a specialized font called MICR E-13B, engineered in the 1950s with magnetic ink so both early optical scanners and magnetic heads would achieve zero recognition errors.',
+  },
+  {
+    tag: 'Crowdsourcing',
+    title: 'The Secret Behind Early reCAPTCHAs',
+    fact: 'Early reCAPTCHA puzzles showed two words: one was a known security check, while the second was an illegible word from scanned archives of old books and newspapers that computerized OCR was unable to decipher!',
+  },
+  {
+    tag: 'Typography',
+    title: 'Disambiguating "l", "1", and "I"',
+    fact: 'Advanced character recognition models analyze ascender heights, serif angles, and typographic x-heights at sub-pixel precision to reliably tell apart visually identical glyphs like lowercase "l", digit "1", and uppercase "I".',
+  },
+  {
+    tag: 'Early Computing',
+    title: 'The 1951 Vacuum-Tube "GISMO"',
+    fact: 'In 1951, inventor David Shepard built "GISMO", a machine powered by 180 vacuum tubes and a rotating optical disc that could read typewritten letters one-by-one—years before computer monitors or silicon chips existed.',
+  },
+  {
+    tag: 'Libraries',
+    title: 'Preserving Centuries of Rare Manuscripts',
+    fact: 'National libraries worldwide have scanned millions of fragile historical manuscripts, using dual-layer OCR to make ancient folios instantly keyword-searchable without exposing delicate pages to physical handling.',
+  },
+  {
+    tag: 'Standards',
+    title: 'The Magic of PDF Text Mode 3',
+    fact: 'Under the official ISO PDF specification, text rendering mode 3 renders glyphs as "neither fill nor stroke"—rendering words completely invisible while keeping them selectable, searchable, and screen-reader accessible.',
+  },
+];
+
 export const OCRStudio = () => {
   const { user, isAuthenticated } = useAuth();
   const fileInputRef = useRef(null);
@@ -103,6 +156,28 @@ export const OCRStudio = () => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // OCR Fun Facts cycling state
+  const [factIndex, setFactIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isProcessing) {
+      setFactIndex(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setFactIndex((prev) => (prev + 1) % OCR_FUN_FACTS.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [isProcessing]);
+
+  const handlePrevFact = () => {
+    setFactIndex((prev) => (prev - 1 + OCR_FUN_FACTS.length) % OCR_FUN_FACTS.length);
+  };
+
+  const handleNextFact = () => {
+    setFactIndex((prev) => (prev + 1) % OCR_FUN_FACTS.length);
   };
 
   // Recent Jobs State
@@ -537,210 +612,151 @@ export const OCRStudio = () => {
           </div>
         </div>
       ) : isProcessing ? (
-        // VIEW: FULL-SCREEN LIVE PROCESSING STATION OCCUPYING THE WORKBENCH
-        <div className="bg-vellum border border-rule rounded-md p-6 sm:p-10 md:p-12 shadow-subtle space-y-8 animate-fade-in">
-          {/* Header Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-rule">
-            <div className="flex items-center space-x-3.5">
-              <div className="w-12 h-12 rounded border border-rule bg-kraft/80 flex items-center justify-center text-ink shrink-0 shadow-subtle">
-                <FileText className="w-6 h-6 text-cyan" />
+        // SIMPLIFIED PROCESSING STATION: CLEAN PROGRESS BAR & OCR FUN FACTS
+        <div className="max-w-2xl mx-auto bg-vellum border border-rule rounded-md p-6 sm:p-9 shadow-subtle space-y-7 animate-fade-in">
+          {/* Header Row: Document Info & Elapsed Timer */}
+          <div className="flex items-center justify-between gap-4 pb-5 border-b border-rule">
+            <div className="flex items-center space-x-3.5 min-w-0">
+              <div className="w-10 h-10 rounded border border-rule bg-kraft/80 flex items-center justify-center text-cyan shrink-0 shadow-subtle">
+                <FileText className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center space-x-2">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-cyan/10 border border-cyan/30 text-cyan text-xs font-mono font-semibold tracking-mono">
-                    <span className="w-2 h-2 rounded-full bg-cyan animate-ping" />
-                    LIVE PIPELINE ACTIVE
-                  </span>
-                  <span className="text-xs font-mono text-ink-faint hidden sm:inline">
-                    JOB ID: {currentJob?.job_id ? String(currentJob.job_id).slice(0, 8) : 'PENDING'}
-                  </span>
-                </div>
-                <h2 className="text-xl sm:text-2xl font-display font-semibold text-ink mt-1 truncate max-w-xl" title={file.name}>
+                <h2 className="text-base sm:text-lg font-display font-semibold text-ink truncate max-w-sm sm:max-w-md" title={file.name}>
                   {file.name}
                 </h2>
                 <div className="flex items-center gap-2 text-xs font-mono text-ink-soft mt-0.5">
                   <span>{formatBytes(file.size)}</span>
                   <span>•</span>
                   <span>{totalPages} {totalPages === 1 ? 'Folio' : 'Pages'}</span>
-                  <span>•</span>
-                  <span className="hidden sm:inline">Dual-Layer Searchable PDF Output</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-4 shrink-0">
               <div className="text-right">
-                <span className="text-[10px] font-mono text-ink-faint block uppercase tracking-mono">ELAPSED TIME</span>
-                <span className="text-base sm:text-lg font-mono font-bold text-ink tabular-nums">
+                <span className="text-[10px] font-mono text-ink-faint block uppercase tracking-mono">TIME</span>
+                <span className="text-sm sm:text-base font-mono font-bold text-ink tabular-nums">
                   {formatTimer(elapsedSeconds)}
                 </span>
               </div>
-            </div>
-          </div>
-
-          {/* Central Live Metric Hero Block */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center py-2 sm:py-4">
-            {/* Left: Giant Percentage Display */}
-            <div className="md:col-span-4 flex flex-col items-center md:items-start border-b md:border-b-0 md:border-r border-rule pb-6 md:pb-0 md:pr-8">
-              <div className="text-6xl sm:text-7xl lg:text-8xl font-mono font-bold text-ink tracking-tight tabular-nums">
-                {liveProgress}<span className="text-3xl sm:text-4xl text-cyan font-normal">%</span>
-              </div>
-              <span className="text-xs font-mono uppercase tracking-mono text-ink-soft mt-1">
-                COMPLETION VELOCITY
-              </span>
-            </div>
-
-            {/* Right: Active Page Counter & Dynamic Status */}
-            <div className="md:col-span-8 space-y-2 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-kraft/80 border border-rule text-xs font-mono text-ink">
-                <Layers className="w-3.5 h-3.5 text-cyan" />
-                <span className="font-semibold uppercase tracking-mono">
-                  PAGE PROGRESSION: FOLIO {activePage} OF {totalPages}
-                </span>
-              </div>
-
-              <h3 className="text-2xl sm:text-3xl font-display font-semibold text-ink leading-tight">
-                {liveProgress < 25
-                  ? `Validating Document Geometry & Structure`
-                  : liveProgress >= 90
-                  ? `Finalizing Injected Layer & Assembling PDF`
-                  : `Transcribing Folio ${activePage} of ${totalPages}`}
-              </h3>
-
-              <p className="text-sm font-mono text-ink-soft leading-relaxed max-w-xl">
-                {liveProgress < 25
-                  ? `Pre-flight validation passed for ${totalPages} folios. Securely streaming raw plate data to isolated memory.`
-                  : liveProgress >= 90
-                  ? `All ${totalPages} pages transcribed. Verifying invisible text layer alignment and searchable coordinate matrix.`
-                  : `${completedPages} of ${totalPages} pages transcribed. Embedding invisible machine-readable text layer behind scan plate.`}
-              </p>
-            </div>
-          </div>
-
-          {/* High-Impact Full-Width Progress Bar */}
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-              <span className="font-semibold text-ink uppercase tracking-mono">
-                PIPELINE STATUS: {stageLabel}
-              </span>
-              <span className="text-ink-soft tabular-nums font-semibold">
-                {completedPages} / {totalPages} PAGES COMPLETED ({Math.max(0, totalPages - completedPages)} REMAINING)
-              </span>
-            </div>
-
-            {/* Thick Progress Track */}
-            <div className="w-full bg-kraft h-4 sm:h-5 rounded-full overflow-hidden p-0.5 border border-rule relative shadow-inner">
-              <div
-                className="h-full bg-gradient-to-r from-cyan via-cyan-600 to-cyan rounded-full transition-all duration-300 ease-out shadow-sm flex items-center justify-end pr-2"
-                style={{ width: `${Math.max(6, liveProgress)}%` }}
+              <button
+                onClick={() => {
+                  setIsProcessing(false);
+                  setErrorMessage('Processing paused by user.');
+                }}
+                className="text-xs font-mono text-ink-soft hover:text-red transition-colors px-2 py-1 rounded hover:bg-red/5 border border-transparent hover:border-red/20"
+                title="Cancel OCR Job"
               >
-                <span className="w-2 h-2 rounded-full bg-paper/80 shadow animate-pulse" />
-              </div>
-            </div>
-
-            {/* Sub-track stage markers */}
-            <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-ink-faint pt-1">
-              <span>0% Ingestion</span>
-              <span className="hidden sm:inline">25% Geometry</span>
-              <span>60% Glyph Transcription</span>
-              <span className="hidden sm:inline">85% Layer Inject</span>
-              <span>100% Assembly</span>
+                Cancel
+              </button>
             </div>
           </div>
 
-          {/* 4 Live Milestone Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
-            {/* Step 1 */}
-            <div className={`p-4 rounded border transition-colors ${
-              liveProgress >= 20 ? 'bg-moss/10 border-moss/30 text-moss' : 'bg-paper border-rule text-ink-faint'
-            }`}>
-              <div className="flex items-center justify-between text-xs font-mono font-bold">
-                <span className="flex items-center">
-                  {liveProgress >= 20 ? <Check className="w-3.5 h-3.5 mr-1 text-moss" /> : <span className="mr-1">1.</span>}
-                  Ingestion
-                </span>
-                {liveProgress >= 20 && <span className="text-[10px] font-normal uppercase">Done</span>}
-              </div>
-              <p className="text-[11px] font-mono mt-1 text-ink-soft">
-                {totalPages} {totalPages === 1 ? 'page' : 'pages'} verified & stream secured
-              </p>
+          {/* Simple Clean Progress Bar Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="font-semibold text-ink flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-cyan animate-pulse" />
+                {liveProgress >= 90
+                  ? 'Finalizing searchable document...'
+                  : totalPages > 1
+                  ? `Transcribing page ${activePage} of ${totalPages}...`
+                  : 'Recognizing text and geometry...'}
+              </span>
+              <span className="font-bold text-ink font-mono text-base tabular-nums">
+                {liveProgress}%
+              </span>
             </div>
 
-            {/* Step 2 */}
-            <div className={`p-4 rounded border transition-colors ${
-              liveProgress >= 30 ? 'bg-moss/10 border-moss/30 text-moss' : liveProgress >= 15 ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-paper border-rule text-ink-faint'
-            }`}>
-              <div className="flex items-center justify-between text-xs font-mono font-bold">
-                <span className="flex items-center">
-                  {liveProgress >= 30 ? <Check className="w-3.5 h-3.5 mr-1 text-moss" /> : <span className="mr-1">2.</span>}
-                  Plate Geometry
-                </span>
-                {liveProgress >= 30 ? (
-                  <span className="text-[10px] font-normal uppercase">Done</span>
-                ) : liveProgress >= 15 ? (
-                  <span className="text-[10px] font-normal uppercase animate-pulse">Active</span>
-                ) : null}
+            {/* Smooth Progress Bar */}
+            <div className="w-full bg-kraft h-3 sm:h-3.5 rounded-full overflow-hidden p-0.5 border border-rule relative shadow-inner">
+              <div
+                className="h-full bg-gradient-to-r from-cyan via-cyan-600 to-cyan rounded-full transition-all duration-300 ease-out shadow-sm flex items-center justify-end"
+                style={{ width: `${Math.max(4, liveProgress)}%` }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-paper/90 shadow mr-1 animate-pulse" />
               </div>
-              <p className="text-[11px] font-mono mt-1 text-ink-soft">
-                Dimensions & orientation mapped
-              </p>
             </div>
 
-            {/* Step 3 */}
-            <div className={`p-4 rounded border transition-colors ${
-              liveProgress >= 88 ? 'bg-moss/10 border-moss/30 text-moss' : liveProgress >= 30 ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-paper border-rule text-ink-faint'
-            }`}>
-              <div className="flex items-center justify-between text-xs font-mono font-bold">
-                <span className="flex items-center">
-                  {liveProgress >= 88 ? <Check className="w-3.5 h-3.5 mr-1 text-moss" /> : <span className="mr-1">3.</span>}
-                  Transcription
-                </span>
-                {liveProgress >= 88 ? (
-                  <span className="text-[10px] font-normal uppercase">Done</span>
-                ) : liveProgress >= 30 ? (
-                  <span className="text-[10px] font-normal uppercase animate-pulse">Folio {activePage}/{totalPages}</span>
-                ) : null}
-              </div>
-              <p className="text-[11px] font-mono mt-1 text-ink-soft">
-                Glyph detection & invisible text layer
-              </p>
-            </div>
-
-            {/* Step 4 */}
-            <div className={`p-4 rounded border transition-colors ${
-              liveProgress >= 100 ? 'bg-moss/10 border-moss/30 text-moss' : liveProgress >= 88 ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-paper border-rule text-ink-faint'
-            }`}>
-              <div className="flex items-center justify-between text-xs font-mono font-bold">
-                <span className="flex items-center">
-                  {liveProgress >= 100 ? <Check className="w-3.5 h-3.5 mr-1 text-moss" /> : <span className="mr-1">4.</span>}
-                  Assembly
-                </span>
-                {liveProgress >= 88 && liveProgress < 100 && (
-                  <span className="text-[10px] font-normal uppercase animate-pulse">Verifying</span>
-                )}
-              </div>
-              <p className="text-[11px] font-mono mt-1 text-ink-soft">
-                Searchable coordinate verification
-              </p>
+            <div className="flex items-center justify-between text-[11px] font-mono text-ink-soft">
+              <span>Dual-layer invisible text injection</span>
+              <span className="tabular-nums">
+                {completedPages} of {totalPages} pages completed
+              </span>
             </div>
           </div>
 
-          {/* Footer note & Abort button */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-rule text-xs font-mono text-ink-faint">
-            <div className="flex items-center space-x-2">
-              <ShieldCheck className="w-4 h-4 text-moss shrink-0" />
-              <span>Isolated RAM namespace processing • Zero visual modification to scan plates</span>
+          {/* OCR FUN FACTS CARD */}
+          <div className="bg-paper border border-rule/80 rounded-md p-5 sm:p-6 relative overflow-hidden shadow-sm transition-all duration-300">
+            {/* Card Header with Category Tag and Manual Prev/Next Controls */}
+            <div className="flex items-center justify-between gap-3 mb-3 pb-2.5 border-b border-rule/50">
+              <div className="flex items-center space-x-2">
+                <span className="w-6 h-6 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-[11px] font-mono font-bold uppercase tracking-mono text-ink">
+                  DID YOU KNOW?
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-kraft text-ink-soft border border-rule">
+                  {OCR_FUN_FACTS[factIndex].tag}
+                </span>
+              </div>
+
+              {/* Prev / Next Buttons */}
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={handlePrevFact}
+                  className="w-6 h-6 rounded flex items-center justify-center text-ink-soft hover:text-ink hover:bg-kraft/80 transition-colors"
+                  aria-label="Previous fact"
+                  title="Previous fact"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-[11px] font-mono text-ink-faint tabular-nums px-1">
+                  {factIndex + 1}/{OCR_FUN_FACTS.length}
+                </span>
+                <button
+                  onClick={handleNextFact}
+                  className="w-6 h-6 rounded flex items-center justify-center text-ink-soft hover:text-ink hover:bg-kraft/80 transition-colors"
+                  aria-label="Next fact"
+                  title="Next fact"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <button
-              onClick={() => {
-                setIsProcessing(false);
-                setErrorMessage('Processing paused by user.');
-              }}
-              className="text-xs font-mono text-ink-soft hover:text-red transition-colors underline"
-            >
-              Cancel Processing
-            </button>
+            {/* Fact Body */}
+            <div className="min-h-[76px] flex flex-col justify-center">
+              <h4 className="font-display font-semibold text-base sm:text-lg text-ink leading-snug">
+                {OCR_FUN_FACTS[factIndex].title}
+              </h4>
+              <p className="mt-1.5 text-xs sm:text-sm font-sans text-ink-soft leading-relaxed">
+                {OCR_FUN_FACTS[factIndex].fact}
+              </p>
+            </div>
+
+            {/* Pagination Dots */}
+            <div className="flex items-center justify-center gap-1.5 mt-4 pt-2 border-t border-rule/30">
+              {OCR_FUN_FACTS.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setFactIndex(idx)}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    idx === factIndex
+                      ? 'w-6 bg-cyan'
+                      : 'w-1.5 bg-ink/20 hover:bg-ink/40'
+                  }`}
+                  aria-label={`Go to fact ${idx + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Reassurance Footer */}
+          <div className="flex items-center justify-center text-xs font-mono text-ink-faint space-x-2 pt-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-moss shrink-0" />
+            <span>Preserving 100% original visual fidelity • Private in-memory processing</span>
           </div>
         </div>
       ) : (
