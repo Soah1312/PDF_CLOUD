@@ -53,19 +53,70 @@ export async function loadPdfDocument(source) {
 }
 
 /**
- * Render a specific page onto an existing HTML5 canvas element
+ * Render a specific page onto an existing HTML5 canvas element with orientation-aware auto-fit
  */
-export async function renderPdfPageToCanvas(pdfDoc, pageNumber, canvas, scale = 1.0) {
+export async function renderPdfPageToCanvas(
+  pdfDoc,
+  pageNumber,
+  canvas,
+  scale = 1.0,
+  container = null,
+  userRotation = 0
+) {
   if (!pdfDoc || !canvas) return null;
   try {
     const page = await pdfDoc.getPage(pageNumber);
     const pixelRatio = window.devicePixelRatio || 1;
-    const viewport = page.getViewport({ scale: scale * pixelRatio });
 
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    canvas.style.width = `${viewport.width / pixelRatio}px`;
-    canvas.style.height = `${viewport.height / pixelRatio}px`;
+    // Combined rotation: native page rotation + custom user view rotation
+    const rotation = ((page.rotate || 0) + (userRotation || 0)) % 360;
+
+    // Unscaled 1.0 viewport to determine true aspect ratio and orientation
+    const unscaledViewport = page.getViewport({ scale: 1.0, rotation });
+    const pageWidth = unscaledViewport.width;
+    const pageHeight = unscaledViewport.height;
+    const isLandscape = pageWidth > pageHeight;
+
+    // Calculate available bounds from container if provided
+    let containerWidth = 560;
+    let containerHeight = 440;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      const rawW = rect.width || container.clientWidth || 560;
+      const rawH = rect.height || container.clientHeight || 440;
+      containerWidth = Math.max(240, rawW - 32);
+      // Cap height calculation so flexible containers don't stretch indefinitely
+      containerHeight = Math.max(240, Math.min(rawH > 100 ? rawH - 32 : 440, 560));
+    }
+
+    // Proportional auto-fit scale: fits both portrait & landscape pages inside the viewport
+    const scaleX = containerWidth / pageWidth;
+    const scaleY = containerHeight / pageHeight;
+    const baseFitScale = Math.min(scaleX, scaleY);
+
+    // Multiply user zoom scale (1.0 = 100% fit, 1.2 = 120% zoom, etc.)
+    const userScale = scale || 1.0;
+    const effectiveScale = Math.max(0.1, baseFitScale * userScale);
+    const viewport = page.getViewport({ scale: effectiveScale * pixelRatio, rotation });
+
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+
+    const displayWidth = Math.round(viewport.width / pixelRatio);
+    const displayHeight = Math.round(viewport.height / pixelRatio);
+
+    canvas.style.width = `${displayWidth}px`;
+    canvas.style.height = `${displayHeight}px`;
+
+    // At fit scale (<= 1.05), enforce containment so it never bleeds or pushes borders
+    if (userScale <= 1.05) {
+      canvas.style.maxWidth = '100%';
+      canvas.style.maxHeight = '100%';
+    } else {
+      canvas.style.maxWidth = 'none';
+      canvas.style.maxHeight = 'none';
+    }
+    canvas.style.objectFit = 'contain';
 
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
@@ -77,8 +128,13 @@ export async function renderPdfPageToCanvas(pdfDoc, pageNumber, canvas, scale = 
     }).promise;
 
     return {
-      width: viewport.width / pixelRatio,
-      height: viewport.height / pixelRatio,
+      width: displayWidth,
+      height: displayHeight,
+      isLandscape,
+      pageWidth,
+      pageHeight,
+      baseFitScale,
+      rotation,
     };
   } catch (err) {
     console.warn(`Failed to render page ${pageNumber} to canvas:`, err);

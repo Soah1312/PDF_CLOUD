@@ -119,7 +119,7 @@ export default function DocumentPreviewModal({ file, onClose, onDelete }) {
 
     async function renderPage() {
       try {
-        await renderPdfPageToCanvas(pdfDoc, currentPage, canvasRef.current, zoomScale);
+        await renderPdfPageToCanvas(pdfDoc, currentPage, canvasRef.current, zoomScale, containerRef.current);
       } catch (err) {
         if (!isCancelled) {
           console.warn(`Render page ${currentPage} error:`, err);

@@ -24,6 +24,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  RotateCw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -52,6 +53,7 @@ export const OCRStudio = () => {
   const { user, isAuthenticated } = useAuth();
   const fileInputRef = useRef(null);
   const canvasRef = useRef(null);
+  const easelRef = useRef(null);
 
   // File & Inspection State
   const [file, setFile] = useState(null);
@@ -67,6 +69,8 @@ export const OCRStudio = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [numPages, setNumPages] = useState(1);
   const [zoomScale, setZoomScale] = useState(1.0);
+  const [pageRotation, setPageRotation] = useState(0);
+  const [pageInfo, setPageInfo] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
   const [fullscreenModalOpen, setFullscreenModalOpen] = useState(false);
@@ -119,7 +123,17 @@ export const OCRStudio = () => {
       try {
         setPreviewLoading(true);
         setPreviewError('');
-        await renderPdfPageToCanvas(activeDoc, currentPage, canvasRef.current, zoomScale);
+        const info = await renderPdfPageToCanvas(
+          activeDoc,
+          currentPage,
+          canvasRef.current,
+          zoomScale,
+          easelRef.current,
+          pageRotation
+        );
+        if (info && !isCancelled) {
+          setPageInfo(info);
+        }
       } catch (err) {
         if (!isCancelled) {
           console.warn(`[OCRStudio] Render page ${currentPage} error:`, err);
@@ -137,7 +151,7 @@ export const OCRStudio = () => {
     return () => {
       isCancelled = true;
     };
-  }, [previewDoc, searchablePdfDoc, previewView, currentPage, zoomScale]);
+  }, [previewDoc, searchablePdfDoc, previewView, currentPage, zoomScale, pageRotation]);
 
   // Handle file selection
   const handleFileSelect = async (selectedFile) => {
@@ -161,6 +175,8 @@ export const OCRStudio = () => {
     setPreviewView('original');
     setCurrentPage(1);
     setZoomScale(1.0);
+    setPageRotation(0);
+    setPageInfo(null);
     setPreviewLoading(true);
 
     // 1. Load document in browser for interactive preview
@@ -221,6 +237,8 @@ export const OCRStudio = () => {
     setCurrentPage(1);
     setNumPages(1);
     setZoomScale(1.0);
+    setPageRotation(0);
+    setPageInfo(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -442,16 +460,21 @@ export const OCRStudio = () => {
           {/* Main Workspace Grid: Left = Preview Desk, Right = Controls & Telemetry */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* LEFT COLUMN: LIVE DOCUMENT PREVIEW DESK (7 Cols) */}
-            <div className="lg:col-span-7 bg-vellum border border-rule rounded-md p-4 sm:p-5 shadow-subtle flex flex-col space-y-3">
+            <div className="lg:col-span-7 bg-vellum border border-rule rounded-md p-4 sm:p-5 shadow-subtle flex flex-col space-y-3 min-w-0">
               {/* Preview Desk Bar */}
-              <div className="flex items-center justify-between pb-3 border-b border-rule text-xs font-mono">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-rule text-xs font-mono">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-ink uppercase tracking-mono">
                     DOCUMENT PROOFING
                   </span>
                   {numPages > 1 && (
                     <span className="px-1.5 py-0.5 rounded bg-kraft border border-rule text-[10px] text-ink-soft">
                       Page {currentPage} of {numPages}
+                    </span>
+                  )}
+                  {pageInfo && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-kraft/90 border border-rule text-[10px] text-ink-soft tracking-tight">
+                      {pageInfo.isLandscape ? 'Landscape Folio' : 'Portrait Folio'}
                     </span>
                   )}
                 </div>
@@ -482,7 +505,7 @@ export const OCRStudio = () => {
                   </div>
                 )}
 
-                {/* Viewport Actions: Zoom & Fullscreen */}
+                {/* Viewport Actions: Zoom, Rotate & Fullscreen */}
                 <div className="flex items-center gap-1">
                   <button
                     onClick={zoomOut}
@@ -491,9 +514,13 @@ export const OCRStudio = () => {
                   >
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
-                  <span className="px-1 text-[10px] text-ink-faint tabular-nums">
+                  <button
+                    onClick={() => setZoomScale(1.0)}
+                    className="px-1.5 py-0.5 rounded text-[10px] text-ink-faint hover:text-ink tabular-nums border border-transparent hover:border-rule"
+                    title="Reset Zoom to 100% Fit"
+                  >
                     {Math.round(zoomScale * 100)}%
-                  </span>
+                  </button>
                   <button
                     onClick={zoomIn}
                     className="p-1 rounded border border-rule bg-paper hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
@@ -502,8 +529,15 @@ export const OCRStudio = () => {
                     <ZoomIn className="w-3.5 h-3.5" />
                   </button>
                   <button
+                    onClick={() => setPageRotation((r) => (r + 90) % 360)}
+                    className="p-1 rounded border border-rule bg-paper hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
+                    title="Rotate View (90° Clockwise)"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                  </button>
+                  <button
                     onClick={() => setFullscreenModalOpen(true)}
-                    className="p-1 ml-1 rounded border border-rule bg-paper hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
+                    className="p-1 ml-0.5 rounded border border-rule bg-paper hover:bg-kraft text-ink-soft hover:text-ink transition-colors"
                     title="Fullscreen Preview"
                   >
                     <Maximize2 className="w-3.5 h-3.5" />
@@ -512,7 +546,10 @@ export const OCRStudio = () => {
               </div>
 
               {/* Folio Easel Mat */}
-              <div className="relative bg-kraft/40 border border-rule/70 rounded p-4 sm:p-6 min-h-[380px] sm:min-h-[460px] flex items-center justify-center overflow-auto">
+              <div
+                ref={easelRef}
+                className="relative bg-kraft/40 border border-rule/70 rounded p-4 sm:p-6 min-h-[380px] sm:min-h-[460px] max-h-[580px] flex items-center justify-center overflow-auto min-w-0 w-full"
+              >
                 {previewLoading && (
                   <div className="absolute inset-0 z-10 bg-vellum/70 backdrop-blur-xs flex flex-col items-center justify-center gap-2">
                     <Loader2 className="w-6 h-6 animate-spin text-cyan" />
@@ -526,11 +563,11 @@ export const OCRStudio = () => {
                     <p>{previewError}</p>
                   </div>
                 ) : (
-                  <div className="relative inline-block max-w-full">
+                  <div className="relative max-w-full max-h-full flex items-center justify-center">
                     {/* Rendered Canvas Sheet */}
                     <canvas
                       ref={canvasRef}
-                      className="max-w-full h-auto rounded border border-rule/60 bg-white shadow-ink-lift transition-transform duration-150"
+                      className="max-w-full max-h-full w-auto h-auto rounded border border-rule/60 bg-white shadow-ink-lift transition-transform duration-150 object-contain"
                     />
 
                     {/* LIVE SCANNING BEAM ANIMATION (Visible when processing) */}
@@ -593,7 +630,7 @@ export const OCRStudio = () => {
             </div>
 
             {/* RIGHT COLUMN: ACTION & TELEMETRY DESK (5 Cols) */}
-            <div className="lg:col-span-5 space-y-4">
+            <div className="lg:col-span-5 space-y-4 min-w-0">
               {/* 1. Folio Dossier Card */}
               <div className="bg-vellum border border-rule rounded-md p-4 sm:p-5 shadow-subtle space-y-3">
                 <div className="flex items-start justify-between gap-3">
