@@ -106,87 +106,99 @@ export const fetchHistory = async () => {
 };
 
 // PDF Processing Engine APIs
-export const processMergePDF = async (formData) => {
+export const processMergePDF = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/merge', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const processSplitPDF = async (formData) => {
+export const processSplitPDF = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/split', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const processRotatePDF = async (formData) => {
+export const processRotatePDF = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/rotate', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const processProtectPDF = async (formData) => {
+export const processProtectPDF = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/protect', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const processCompressPDF = async (formData) => {
+export const processCompressPDF = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/compress', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const processWatermarkPDF = async (formData) => {
+export const processWatermarkPDF = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/watermark', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const processPdfToImages = async (formData) => {
+export const processPdfToImages = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/to-images', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const processImagesToPdf = async (formData) => {
+export const processImagesToPdf = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/from-images', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const processPdfToWord = async (formData) => {
+export const processPdfToWord = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/to-word', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const processWordToPdf = async (formData) => {
+export const processWordToPdf = async (formData, config = {}) => {
   const response = await api.post('/api/v1/pdf/from-word', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
 // --- Invisible Canary Watermark API ---
-export const embedCanaryWatermark = async (formData) => {
+export const embedCanaryWatermark = async (formData, config = {}) => {
   const response = await api.post('/api/v1/canary/embed', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };
 
-export const verifyCanaryDocument = async (formData) => {
+export const verifyCanaryDocument = async (formData, config = {}) => {
   const response = await api.post('/api/v1/canary/verify', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
   });
   return response.data;
 };

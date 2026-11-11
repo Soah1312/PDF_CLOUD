@@ -137,32 +137,22 @@ export default function ToolRunner() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStage, setProcessingStage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [progressMetrics, setProgressMetrics] = useState({ pct: 0, speed: '16.4 MB/s', timeLeft: '1s' });
+  const [progressMetrics, setProgressMetrics] = useState({
+    phase: 'idle',
+    pct: 0,
+    loadedBytes: 0,
+    totalBytes: 0,
+    speed: '',
+    timeLeft: '',
+    elapsed: '0.0s',
+  });
   const [resultData, setResultData] = useState(null);
 
-  // Smooth progress metrics timer and tab title/favicon update during processing
+  // Restore tab title/favicon when processing stops
   useEffect(() => {
     if (!isProcessing) {
       restoreTabProgress();
-      setProgressMetrics({ pct: 0, speed: '16.4 MB/s', timeLeft: '1s' });
-      return;
     }
-    const interval = setInterval(() => {
-      setProgressMetrics((prev) => {
-        const nextPct = Math.min(96, prev.pct + Math.floor(Math.random() * 8 + 4));
-        updateTabProgress(nextPct);
-        const rem = Math.max(0, Math.ceil((100 - nextPct) / 30));
-        return {
-          pct: nextPct,
-          speed: `${(14 + Math.random() * 4).toFixed(1)} MB/s`,
-          timeLeft: rem > 0 ? `${rem}s left` : '<1s left',
-        };
-      });
-    }, 180);
-    return () => {
-      clearInterval(interval);
-      restoreTabProgress();
-    };
   }, [isProcessing]);
   const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -469,7 +459,14 @@ export default function ToolRunner() {
       abortControllerRef.current.abort();
     }
     setIsProcessing(false);
+    restoreTabProgress();
     setProcessingStage('Operation aborted by user.');
+    setProgressMetrics((prev) => ({
+      ...prev,
+      phase: 'idle',
+      pct: 0,
+      timeLeft: 'Cancelled',
+    }));
   };
 
   const handleExecute = async () => {
@@ -490,9 +487,34 @@ export default function ToolRunner() {
     }
 
     setIsProcessing(true);
-    setProcessingStage('Mounting document stream in RAM...');
+    const initialStage =
+      currentTool.id === 'compress'
+        ? 'Compressing content streams & font subsets...'
+        : currentTool.id === 'merge'
+        ? 'Binding and interleaving folios...'
+        : currentTool.id === 'from-images'
+        ? `Compiling ${selectedFiles.length} image plates into PDF booklet...`
+        : currentTool.id === 'canary'
+        ? 'Computing SHA-256 and embedding invisible markers...'
+        : `Preparing ${currentTool.title}...`;
+
+    setProcessingStage(initialStage);
     setErrorMessage('');
     setResultData(null);
+
+    const startTime = performance.now();
+    let serverTicker = null;
+
+    setProgressMetrics({
+      phase: 'upload',
+      pct: 0,
+      loadedBytes: 0,
+      totalBytes: totalBytes,
+      speed: 'Measuring...',
+      timeLeft: 'Starting upload...',
+      elapsed: '0.0s',
+    });
+    updateTabProgress(0);
 
     abortControllerRef.current = new AbortController();
 
@@ -543,26 +565,83 @@ export default function ToolRunner() {
         formData.append('margin_mode', imageMarginMode);
       }
 
-      setProcessingStage(
-        currentTool.id === 'compress'
-          ? 'Compressing content streams & font subsets...'
-          : currentTool.id === 'merge'
-          ? 'Binding and interleaving folios...'
-          : currentTool.id === 'from-images'
-          ? `Compiling ${selectedFiles.length} image plates into PDF booklet...`
-          : currentTool.id === 'canary'
-          ? 'Computing SHA-256 and embedding invisible markers...'
-          : 'Processing document on bench...'
-      );
-
       let procState = 'processing:generic';
       if (currentTool.id === 'merge' || currentTool.id === 'from-images') procState = 'processing:merge';
       else if (currentTool.id === 'split') procState = 'processing:split';
       else if (currentTool.id === 'compress') procState = 'processing:compress';
       motionBus.emit('pressroom:state', procState);
 
+      const config = {
+        signal: abortControllerRef.current.signal,
+        onUploadProgress: (progressEvent) => {
+          const loaded = progressEvent.loaded || 0;
+          const total = progressEvent.total || totalBytes || 1;
+          const now = performance.now();
+          const elapsedSec = Math.max(0.05, (now - startTime) / 1000);
+          const pct = Math.min(100, Math.round((loaded / total) * 100));
+          const bytesPerSec = loaded / elapsedSec;
+          const speedMb = (bytesPerSec / (1024 * 1024)).toFixed(1);
+          const remBytes = Math.max(0, total - loaded);
+          const remSec = bytesPerSec > 0 ? Math.ceil(remBytes / bytesPerSec) : 0;
+
+          updateTabProgress(pct);
+
+          if (pct < 100) {
+            setProgressMetrics({
+              phase: 'upload',
+              pct,
+              loadedBytes: loaded,
+              totalBytes: total,
+              speed: `${speedMb} MB/s`,
+              timeLeft: remSec > 0 ? `${remSec}s left` : '<1s left',
+              elapsed: `${elapsedSec.toFixed(1)}s`,
+            });
+          } else {
+            setProgressMetrics((prev) => ({
+              ...prev,
+              phase: 'processing',
+              pct: 100,
+              loadedBytes: total,
+              totalBytes: total,
+              speed: `${speedMb} MB/s (Upload Complete)`,
+              timeLeft: 'Executing...',
+              elapsed: `${elapsedSec.toFixed(1)}s`,
+            }));
+            setProcessingStage('Server executing operation in memory...');
+          }
+        },
+      };
+
+      // Ticker to keep elapsed seconds live during server execution
+      serverTicker = setInterval(() => {
+        const now = performance.now();
+        const elapsedSec = ((now - startTime) / 1000).toFixed(1);
+        setProgressMetrics((prev) => {
+          if (prev.phase === 'processing') {
+            return {
+              ...prev,
+              elapsed: `${elapsedSec}s`,
+            };
+          }
+          return prev;
+        });
+      }, 100);
+
       const apiFunc = getToolApi();
-      const res = await apiFunc(formData);
+      const res = await apiFunc(formData, config);
+
+      clearInterval(serverTicker);
+
+      setProgressMetrics({
+        phase: 'done',
+        pct: 100,
+        loadedBytes: totalBytes,
+        totalBytes: totalBytes,
+        speed: 'Completed',
+        timeLeft: 'Done',
+        elapsed: `${((performance.now() - startTime) / 1000).toFixed(1)}s`,
+      });
+      updateTabProgress(100);
 
       // Trigger slight haptic pulse on devices that support it
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -577,6 +656,7 @@ export default function ToolRunner() {
 
       setResultData(res);
     } catch (err) {
+      clearInterval(serverTicker);
       motionBus.emit('pressroom:state', 'error');
       setTimeout(() => {
         motionBus.emit('pressroom:state', 'idle');
@@ -596,13 +676,14 @@ export default function ToolRunner() {
         setErrorMessage(detail);
       }
     } finally {
+      clearInterval(serverTicker);
       if (wakeLock) {
         try {
           await wakeLock.release();
         } catch (e) {}
       }
       setIsProcessing(false);
-      setProcessingStage('');
+      restoreTabProgress();
     }
   };
 
@@ -1317,6 +1398,71 @@ export default function ToolRunner() {
                 <div className="p-3 rounded border border-rule bg-kraft/60 text-xs font-mono text-ink flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-marigold shrink-0" />
                   <span>Large folio footprint ({formatBytes(totalBytes)}). Processing memory-mapped streams.</span>
+                </div>
+              )}
+
+              {/* Prominent Live Execution Banner (Active when processing) */}
+              {isProcessing && (
+                <div className="p-4 sm:p-5 rounded-md border-2 border-cyan/40 bg-vellum shadow-ink-lift space-y-3 animate-fade-in">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-rule">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded border border-cyan/30 bg-cyan/10 flex items-center justify-center text-cyan shrink-0">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-kraft border border-rule text-[10px] font-mono font-semibold uppercase tracking-mono text-cyan">
+                            {progressMetrics.phase === 'upload' ? 'Upload Phase' : 'Execution Phase'}
+                          </span>
+                          <span className="text-xs font-mono text-ink-faint">
+                            Elapsed: {progressMetrics.elapsed}
+                          </span>
+                        </div>
+                        <h3 className="font-display text-base font-semibold text-ink mt-0.5">
+                          {processingStage || `Executing ${currentTool.title}...`}
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={handleCancel}
+                        className="px-3 py-1.5 rounded border border-rule bg-paper hover:bg-red/10 hover:text-red text-xs font-mono text-ink-soft transition-colors"
+                      >
+                        Cancel Operation
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Real Metrics Row & Progress Bar */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-ink tabular-nums">
+                          {progressMetrics.pct}%
+                        </span>
+                        <span className="text-ink-soft">
+                          ({formatBytes(progressMetrics.loadedBytes)} / {formatBytes(progressMetrics.totalBytes || totalBytes)})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] font-mono">
+                        <span className="text-ink font-semibold">{progressMetrics.speed}</span>
+                        <span className="text-moss font-semibold">{progressMetrics.timeLeft}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-kraft border border-rule/70 h-3 rounded-full overflow-hidden shadow-inner">
+                      <div
+                        className={`h-full rounded-full transition-all duration-150 ${
+                          progressMetrics.phase === 'processing'
+                            ? 'bg-moss animate-pulse'
+                            : 'bg-red'
+                        }`}
+                        style={{ width: `${progressMetrics.pct}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -2128,32 +2274,50 @@ export default function ToolRunner() {
           className="fixed bottom-0 inset-x-0 z-30 bg-vellum/95 backdrop-blur-md border-t border-rule py-3 px-4 sm:px-6 shadow-ink-lift"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
         >
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-2 sm:gap-3">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
               <span className="text-xs font-semibold text-ink">
                 {selectedFiles.length} {selectedFiles.length === 1 ? 'folio' : 'folios'}
               </span>
               <span className="text-xs font-mono text-ink-soft tabular-nums">
                 [{formatBytes(totalBytes)}]
               </span>
-              {isProcessing && (
-                <div className="hidden sm:flex flex-col gap-1 min-w-[190px] max-w-xs">
-                  <div className="paper-progress-strip w-full">
-                    <div
-                      className="paper-progress-fill"
-                      style={{ width: `${progressMetrics.pct}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] font-mono text-ink-soft tabular-nums">
-                    <span>{progressMetrics.pct}%</span>
-                    <span>{progressMetrics.speed}</span>
-                    <span>{progressMetrics.timeLeft}</span>
-                  </div>
-                </div>
-              )}
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Prominent Progress Center Column */}
+            {isProcessing && (
+              <div className="flex-1 w-full max-w-xl mx-0 sm:mx-4 space-y-1.5 animate-fade-in">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-ink tabular-nums">
+                      {progressMetrics.pct}%
+                    </span>
+                    <span className="text-ink-soft text-[11px]">
+                      {progressMetrics.phase === 'upload'
+                        ? `${formatBytes(progressMetrics.loadedBytes)} / ${formatBytes(progressMetrics.totalBytes || totalBytes)}`
+                        : 'Server assembling folios in memory...'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-[11px]">
+                    <span className="text-ink font-semibold">{progressMetrics.speed}</span>
+                    <span className="text-moss font-semibold">{progressMetrics.timeLeft}</span>
+                  </div>
+                </div>
+
+                <div className="w-full bg-kraft border border-rule/70 h-2.5 rounded-full overflow-hidden shadow-inner">
+                  <div
+                    className={`h-full rounded-full transition-all duration-150 ${
+                      progressMetrics.phase === 'processing'
+                        ? 'bg-moss animate-pulse'
+                        : 'bg-red'
+                    }`}
+                    style={{ width: `${progressMetrics.pct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
               {isProcessing && (
                 <button
                   type="button"
@@ -2167,7 +2331,11 @@ export default function ToolRunner() {
               <PrimaryButton
                 onClick={handleExecute}
                 loading={isProcessing}
-                loadingText="Binding folios..."
+                loadingText={
+                  progressMetrics.phase === 'upload'
+                    ? `Uploading ${progressMetrics.pct}%...`
+                    : `${currentTool.title}...`
+                }
                 className="px-5 sm:px-6 min-h-[44px]"
               >
                 <span>{currentTool.actionBtn || `Execute ${currentTool.title}`}</span>
