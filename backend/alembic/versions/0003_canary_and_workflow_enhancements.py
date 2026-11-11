@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
-revision: str = '0003_canary_and_workflow'
+revision: str = '0003_canary_and_workflow_enhancements'
 down_revision: Union[str, None] = '0002_add_stage2_cols'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

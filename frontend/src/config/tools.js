@@ -236,5 +236,20 @@ export const BINDERY_TOOLS = [
     accept: '.pdf,application/pdf',
     multiple: false,
   },
+  {
+    id: 'ocr',
+    number: '15',
+    title: 'OCR Studio — Make PDF Searchable',
+    verb: 'recognize',
+    category: 'convert',
+    group: 'Convert',
+    description: 'Transform scanned documents and plate images into searchable, selectable PDFs with invisible text layer via Amazon Textract.',
+    to: '/tools/ocr',
+    icon: SearchCheck,
+    tint: 'var(--tint-convert)',
+    badgeText: 'Textract OCR',
+    accept: '.pdf,application/pdf',
+    multiple: false,
+  },
 ];
 

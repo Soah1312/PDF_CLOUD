@@ -22,6 +22,7 @@ class User(Base):
     pdf_jobs = relationship("PDFJob", back_populates="user", cascade="all, delete-orphan")
     canary_tokens = relationship("CanaryToken", back_populates="user", cascade="all, delete-orphan")
     workflows = relationship("SavedWorkflow", back_populates="user", cascade="all, delete-orphan")
+    ocr_jobs = relationship("OCRJob", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email}>"

@@ -9,6 +9,11 @@ from app.schemas.workflow import (
     WorkflowStepConfig,
     WorkflowStepExecution,
 )
+from app.schemas.ocr import (
+    OCRInspectResponse,
+    OCRJobCreateResponse,
+    OCRJobStatusResponse,
+)
 
 __all__ = [
     "UserRead",
@@ -26,4 +31,7 @@ __all__ = [
     "WorkflowExecutionResponse",
     "WorkflowStepConfig",
     "WorkflowStepExecution",
+    "OCRInspectResponse",
+    "OCRJobCreateResponse",
+    "OCRJobStatusResponse",
 ]

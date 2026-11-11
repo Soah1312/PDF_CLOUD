@@ -230,4 +230,49 @@ export const fetchWorkflowExecution = async (executionId) => {
   return response.data;
 };
 
+// --- Amazon Textract OCR Studio APIs ---
+export const inspectPdfOcr = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await api.post('/api/v1/ocr/inspect', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const createSearchablePdf = async (file, forceOcr = false) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('force_ocr', forceOcr ? 'true' : 'false');
+  const response = await api.post('/api/v1/ocr/searchable', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const getOcrJobStatus = async (jobId) => {
+  const response = await api.get(`/api/v1/ocr/jobs/${jobId}`);
+  return response.data;
+};
+
+export const downloadOcrPdf = async (jobId, filename = 'searchable_document.pdf') => {
+  const response = await api.get(`/api/v1/ocr/jobs/${jobId}/download`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+  return true;
+};
+
+export const fetchOcrJobs = async () => {
+  const response = await api.get('/api/v1/ocr/jobs');
+  return response.data;
+};
+
 export default api;

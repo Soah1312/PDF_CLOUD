@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, files, pdf, history, canary, workflows
+from app.api.v1 import auth, files, pdf, history, canary, workflows, ocr
 
 api_router = APIRouter()
 
@@ -20,5 +20,8 @@ api_router.include_router(canary.router)
 
 # Mount automated workflow studio endpoints
 api_router.include_router(workflows.router)
+
+# Mount Amazon Textract OCR Studio endpoints
+api_router.include_router(ocr.router)
 
 

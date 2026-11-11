@@ -18,6 +18,7 @@ import ConfirmEmail from './pages/ConfirmEmail';
 import Workspace from './pages/Workspace';
 import WorkflowStudio from './pages/WorkflowStudio';
 import ToolRunner from './pages/ToolRunner';
+import OCRStudio from './pages/OCRStudio';
 
 function AppContent() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -84,6 +85,7 @@ function AppContent() {
         <Routes>
           {/* Public & Guest Accessible Routes */}
           <Route path="/" element={<Home />} />
+          <Route path="/tools/ocr" element={<OCRStudio />} />
           <Route path="/tools/:toolId" element={<ToolRunner />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
