@@ -717,7 +717,11 @@ async def word_to_pdf_endpoint(
     base_name = os.path.splitext(orig_name)[0]
     out_name = f"{base_name}.pdf"
 
-    docx_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ext = os.path.splitext(orig_name)[1].lower()
+    if ext == ".doc":
+        word_mime = "application/msword"
+    else:
+        word_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
     if cognito_sub:
         raw_key = storage_service.build_user_raw_key(cognito_sub, orig_name)
@@ -726,7 +730,7 @@ async def word_to_pdf_endpoint(
         raw_key = storage_service.build_guest_raw_key(session_id, orig_name)
         proc_key = storage_service.build_guest_processed_key(session_id, out_name)
 
-    storage_service.upload_file(content, raw_key, docx_mime)
+    storage_service.upload_file(content, raw_key, word_mime)
 
     job = job_service.create_pending_job(
         db=db,
@@ -736,7 +740,7 @@ async def word_to_pdf_endpoint(
         s3_input_key=raw_key,
         user_id=user_id,
         session_id=session_id,
-        mime_type=docx_mime
+        mime_type=word_mime
     )
 
     try:

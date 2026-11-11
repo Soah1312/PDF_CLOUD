@@ -734,16 +734,39 @@ class PDFEngineService:
         original_filename: str = "document.docx"
     ) -> bytes:
         """
-        Converts DOCX documents into PDF using LibreOffice in headless mode.
-        Validates output and handles missing LibreOffice environments gracefully.
+        Converts DOCX / DOC / Word documents into fixed-layout printable PDF.
+        Uses native PyMuPDF conversion first (in-memory, high fidelity, zero external dependencies).
+        Falls back to LibreOffice headless conversion when available on the host.
         """
-        if not validate_file_signature(file_bytes, "docx"):
+        is_zip = file_bytes.startswith(b"PK\x03\x04")
+        is_ole_doc = file_bytes.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+
+        if not (is_zip or is_ole_doc or validate_file_signature(file_bytes, "word")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File '{original_filename}' is not a valid DOCX document."
+                detail=f"File '{original_filename}' is not a valid Microsoft Word document (.docx, .doc, or .docs)."
             )
 
-        # Locate LibreOffice / soffice executable
+        # 1. Primary Engine: Native PyMuPDF converter
+        # Blazing fast, zero external system binary dependencies, in-memory stream processing
+        if is_zip:
+            try:
+                import fitz
+                doc = fitz.open(stream=file_bytes, filetype="docx")
+                pdf_bytes = doc.convert_to_pdf()
+                if pdf_bytes and len(pdf_bytes) > 0:
+                    logger.info(
+                        f"[WordToPDF] Successfully converted '{original_filename}' "
+                        f"via native PyMuPDF engine ({len(pdf_bytes)} bytes)."
+                    )
+                    return pdf_bytes
+            except Exception as e:
+                logger.warning(
+                    f"[WordToPDF] Native PyMuPDF converter encountered an issue on '{original_filename}': {e}. "
+                    "Attempting headless office converter fallback..."
+                )
+
+        # 2. Secondary Engine: Headless LibreOffice (if installed on host)
         soffice_path = shutil.which("soffice") or shutil.which("libreoffice")
 
         # Standard Windows locations
@@ -757,58 +780,71 @@ class PDFEngineService:
                     soffice_path = cand
                     break
 
-        if not soffice_path:
-            logger.warning("[WordToPDF] LibreOffice is not installed on this host environment.")
+        if soffice_path:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                _, ext = os.path.splitext(original_filename)
+                clean_ext = ext.lower() if ext else ".docx"
+                if clean_ext not in (".docx", ".doc", ".docs", ".dotx", ".rtf"):
+                    clean_ext = ".docx"
+
+                input_path = os.path.join(temp_dir, f"input{clean_ext}")
+                with open(input_path, "wb") as f:
+                    f.write(file_bytes)
+
+                cmd = [
+                    soffice_path,
+                    "--headless",
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    temp_dir,
+                    input_path
+                ]
+
+                try:
+                    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+                    if result.returncode == 0:
+                        output_pdf_path = os.path.join(temp_dir, "input.pdf")
+                        if not os.path.exists(output_pdf_path):
+                            candidates = [
+                                os.path.join(temp_dir, f)
+                                for f in os.listdir(temp_dir)
+                                if f.endswith(".pdf")
+                            ]
+                            if candidates:
+                                output_pdf_path = candidates[0]
+
+                        if os.path.exists(output_pdf_path):
+                            with open(output_pdf_path, "rb") as f:
+                                return f.read()
+                    else:
+                        err_msg = result.stderr.decode("utf-8", errors="ignore")
+                        logger.error(f"[WordToPDF] Headless office converter error (code {result.returncode}): {err_msg}")
+                except subprocess.TimeoutExpired:
+                    raise HTTPException(
+                        status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                        detail="Word to PDF conversion timed out after 60 seconds."
+                    )
+                except Exception as e:
+                    logger.error(f"[WordToPDF] Headless conversion failure: {e}")
+
+        # If it's a legacy OLE2 .doc and office suite was not installed
+        if is_ole_doc:
             raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    "LibreOffice is not installed on this server. "
-                    "For Amazon Linux 2023 EC2, run: 'sudo dnf install -y libreoffice'. "
-                    "For Windows local development, install LibreOffice from https://www.libreoffice.org."
+                    f"File '{original_filename}' is in legacy Word 97-2003 (.doc) binary format. "
+                    "Please save or export the document as modern Word (.docx or .docs) and re-upload."
                 )
             )
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            input_docx_path = os.path.join(temp_dir, "input.docx")
-            with open(input_docx_path, "wb") as f:
-                f.write(file_bytes)
-
-            cmd = [
-                soffice_path,
-                "--headless",
-                "--convert-to",
-                "pdf",
-                "--outdir",
-                temp_dir,
-                input_docx_path
-            ]
-
-            try:
-                result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
-                if result.returncode != 0:
-                    err_msg = result.stderr.decode("utf-8", errors="ignore")
-                    logger.error(f"[WordToPDF] LibreOffice returned code {result.returncode}: {err_msg}")
-                    raise RuntimeError(f"LibreOffice error: {err_msg}")
-
-                output_pdf_path = os.path.join(temp_dir, "input.pdf")
-                if not os.path.exists(output_pdf_path):
-                    raise RuntimeError("Converted PDF output file was not found.")
-
-                with open(output_pdf_path, "rb") as f:
-                    pdf_bytes = f.read()
-
-                return pdf_bytes
-            except subprocess.TimeoutExpired:
-                raise HTTPException(
-                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail="Word to PDF conversion timed out after 60 seconds."
-                )
-            except Exception as e:
-                logger.error(f"[WordToPDF] Conversion failure: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"DOCX to PDF conversion failed: {str(e)}"
-                )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Unable to convert '{original_filename}' to PDF. "
+                "Please verify that the document is not password-protected and is a valid Word manuscript (.docx, .doc, or .docs)."
+            )
+        )
 
 
 pdf_engine = PDFEngineService()

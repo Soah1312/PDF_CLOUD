@@ -78,6 +78,16 @@ function formatBytes(bytes) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
+function formatAcceptedLabel(acceptStr) {
+  if (!acceptStr) return 'PDF';
+  const exts = acceptStr
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.startsWith('.'))
+    .map((s) => s.toUpperCase());
+  return exts.length ? exts.join(', ') : 'files';
+}
+
 export default function ToolRunner() {
   const { toolId } = useParams();
   const location = useLocation();
@@ -267,7 +277,7 @@ export default function ToolRunner() {
         );
         if (!matchesType && allowed.length > 0) {
           setErrorMessage(
-            `File "${f.name}" is not supported by ${currentTool.title}. Expected ${currentTool.accept}.`
+            `File "${f.name}" is not supported by ${currentTool.title}. Expected ${formatAcceptedLabel(currentTool.accept)}.`
           );
           motionBus.emit('pressroom:state', 'error');
           setTimeout(() => motionBus.emit('pressroom:state', 'idle'), 400);
@@ -1293,7 +1303,7 @@ export default function ToolRunner() {
                       : `Place ${currentTool.multiple ? 'documents' : 'a document'} on the bench`}
                   </p>
                   <p className="text-xs text-ink-soft mt-1">
-                    Drag and drop {currentTool.accept.toUpperCase()} or click to select from storage.
+                    Drag and drop {formatAcceptedLabel(currentTool.accept)} or click to select from storage.
                   </p>
                 </div>
 

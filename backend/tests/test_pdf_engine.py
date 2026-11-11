@@ -142,10 +142,36 @@ def test_pdf_to_word():
 
 
 def test_word_to_pdf_handling():
-    # If LibreOffice is not installed, it should raise HTTP 501 with informative instruction
-    # If installed, it converts to valid PDF
+    # Corrupt or invalid word file raises 400 or 422
     try:
-        pdf_bytes = pdf_engine.word_to_pdf(b"PK\x03\x04dummy", "test.docx")
-        assert pdf_bytes.startswith(b"%PDF-")
+        pdf_engine.word_to_pdf(b"not a valid word file", "invalid.docx")
+        assert False, "Should have raised HTTPException"
     except HTTPException as e:
-        assert e.status_code in (status.HTTP_501_NOT_IMPLEMENTED, status.HTTP_400_BAD_REQUEST, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        assert e.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
+def test_word_to_pdf_real_conversion():
+    import docx
+    d = docx.Document()
+    d.add_heading("Test Conversion", level=0)
+    d.add_paragraph("This is a paragraph converted to PDF.")
+    buf = io.BytesIO()
+    d.save(buf)
+    docx_bytes = buf.getvalue()
+
+    pdf_bytes = pdf_engine.word_to_pdf(docx_bytes, "proposal.docx")
+    assert pdf_bytes.startswith(b"%PDF-")
+    assert len(pdf_bytes) > 0
+
+
+def test_word_to_pdf_docs_extension():
+    import docx
+    d = docx.Document()
+    d.add_paragraph("Testing .docs extension conversion.")
+    buf = io.BytesIO()
+    d.save(buf)
+    docx_bytes = buf.getvalue()
+
+    pdf_bytes = pdf_engine.word_to_pdf(docx_bytes, "proposal.docs")
+    assert pdf_bytes.startswith(b"%PDF-")
+

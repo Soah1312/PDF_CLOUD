@@ -44,8 +44,10 @@ def validate_file_signature(content: bytes, expected_type: str) -> bool:
         return content.startswith(b"\xff\xd8\xff")
     elif expected == "png":
         return content.startswith(b"\x89PNG\r\n\x1a\n")
-    elif expected in ("docx", "zip"):
+    elif expected in ("docx", "docs", "zip"):
         return content.startswith(b"PK\x03\x04")
+    elif expected in ("doc", "word"):
+        return content.startswith(b"PK\x03\x04") or content.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
     return True
 
 

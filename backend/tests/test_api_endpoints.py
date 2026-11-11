@@ -302,3 +302,43 @@ def test_watermark_endpoint_accepts_text_param():
     assert data["status"] == "COMPLETED"
     assert "watermarked_sample.pdf" in data["output_filename"]
 
+
+def test_word_to_pdf_endpoint_docx():
+    import docx
+    d = docx.Document()
+    d.add_heading("API Test Word Document", level=0)
+    d.add_paragraph("Testing word-to-pdf API endpoint.")
+    buf = io.BytesIO()
+    d.save(buf)
+    docx_bytes = buf.getvalue()
+
+    res = client.post(
+        "/api/v1/pdf/from-word",
+        files={"file": ("proposal.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        headers={"X-Guest-Session-ID": str(uuid.uuid4())}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "COMPLETED"
+    assert data["output_filename"] == "proposal.pdf"
+
+
+def test_word_to_pdf_endpoint_docs_extension():
+    import docx
+    d = docx.Document()
+    d.add_paragraph("Testing .docs file extension.")
+    buf = io.BytesIO()
+    d.save(buf)
+    docx_bytes = buf.getvalue()
+
+    res = client.post(
+        "/api/v1/pdf/from-word",
+        files={"file": ("contract.docs", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        headers={"X-Guest-Session-ID": str(uuid.uuid4())}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "COMPLETED"
+    assert data["output_filename"] == "contract.pdf"
+
+
