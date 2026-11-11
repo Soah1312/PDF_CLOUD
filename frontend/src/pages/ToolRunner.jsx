@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Layers,
@@ -143,6 +144,9 @@ export default function ToolRunner() {
   // Password-protected PDF prompt state
   const [pdfPasswordPrompt, setPdfPasswordPrompt] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
+
+  // Unauthenticated Member Guard Modal state
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Execution & Progress state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -486,6 +490,11 @@ export default function ToolRunner() {
       return;
     }
 
+    if (currentTool.requiresAuth && !isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+
     if (currentTool.id === 'protect') {
       if (!protectPassword) {
         setErrorMessage('Please specify an encryption password.');
@@ -680,6 +689,9 @@ export default function ToolRunner() {
 
       if (err.name === 'CanceledError' || err.name === 'AbortError') {
         setErrorMessage('Execution cancelled.');
+      } else if (err.response?.status === 401 && currentTool.requiresAuth) {
+        setShowAuthModal(true);
+        setErrorMessage('Member authentication is required for forensic canary tracking. Please sign in to continue.');
       } else {
         console.error('Processing error:', err);
         const detail = extractErrorMessage(err);
@@ -1044,10 +1056,35 @@ export default function ToolRunner() {
       {/* 7. CANARY WATERMARK FORENSICS */}
       {currentTool.id === 'canary' && (
         <div className="space-y-3">
-          <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-moss" />
-            <span>Forensic Attribution</span>
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-moss" />
+              <span>Forensic Attribution</span>
+            </span>
+            <span className="text-[10px] font-mono tracking-mono text-ink-faint px-1.5 py-0.5 rounded bg-kraft border border-rule">
+              VAULT ONLY
+            </span>
+          </div>
+
+          {!isAuthenticated && (
+            <div className="p-3 rounded border border-rule bg-kraft/60 text-xs text-ink space-y-1.5 animate-fade-in">
+              <div className="flex items-center gap-1.5 font-semibold text-ink">
+                <Lock className="w-3.5 h-3.5 text-red shrink-0" />
+                <span>Member Session Required</span>
+              </div>
+              <p className="text-[11px] text-ink-soft leading-relaxed">
+                Canary tokens are cryptographically registered to your member ledger to audit leaks.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(true)}
+                className="text-[11px] font-mono font-semibold text-red hover:underline text-left inline-flex items-center gap-1"
+              >
+                Sign in to your account &rarr;
+              </button>
+            </div>
+          )}
+
           <input
             type="text"
             value={canaryRecipientName}
@@ -1226,6 +1263,38 @@ export default function ToolRunner() {
             </span>
           </div>
         </div>
+
+        {/* Member Authentication Notice for Canary & Protected Tools */}
+        {currentTool.requiresAuth && !isAuthenticated && (
+          <div className="p-4 rounded-md border border-rule bg-vellum shadow-subtle flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in mb-2">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded bg-kraft border border-rule flex items-center justify-center shrink-0 text-red mt-0.5 shadow-subtle">
+                <Fingerprint className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-ink">Member Sign-In Required for Forensic Tracking</p>
+                <p className="text-[11px] text-ink-soft mt-0.5 max-w-xl leading-relaxed">
+                  Forensic Canary Watermarks inject invisible, cryptographically signed tokens linked to your verified Member Ledger so leaks can be traced to specific recipients. Please sign in or register to activate forensic tracking.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+              <Link
+                to="/login"
+                state={{ from: location }}
+                className="flex-1 sm:flex-initial text-center px-4 py-1.5 rounded bg-red text-vellum text-xs font-semibold shadow-ink-button hover:bg-red-dark transition-colors min-h-[36px] flex items-center justify-center"
+              >
+                Sign In
+              </Link>
+              <Link
+                to="/register"
+                className="flex-1 sm:flex-initial text-center px-3.5 py-1.5 rounded border border-rule bg-paper hover:bg-kraft text-ink text-xs font-mono transition-colors min-h-[36px] flex items-center justify-center"
+              >
+                Register
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* PHASE 1: ADD (Empty State Dropzone) */}
         {selectedFiles.length === 0 && !resultData && (
@@ -2355,12 +2424,87 @@ export default function ToolRunner() {
                 }
                 className="px-5 sm:px-6 min-h-[44px]"
               >
-                <span>{currentTool.actionBtn || `Execute ${currentTool.title}`}</span>
+                {currentTool.requiresAuth && !isAuthenticated ? (
+                  <span className="flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Sign In to Execute</span>
+                  </span>
+                ) : (
+                  <span>{currentTool.actionBtn || `Execute ${currentTool.title}`}</span>
+                )}
               </PrimaryButton>
             </div>
           </div>
         </div>
       )}
+
+      {/* Graceful Authentication Modal for Canary & Member Features */}
+      {showAuthModal &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-ink/60 backdrop-blur-sm animate-fade-in">
+            <div
+              className="relative w-full max-w-md bg-paper border border-rule-strong rounded-lg shadow-2xl p-6 space-y-5"
+              role="dialog"
+              aria-modal="true"
+            >
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(false)}
+                className="absolute top-4 right-4 p-1.5 rounded-md text-ink-soft hover:text-ink hover:bg-kraft/60 transition-colors"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-kraft border border-rule flex items-center justify-center text-red shrink-0 shadow-subtle">
+                  <Fingerprint className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-ink">
+                    Member Sign-In Required
+                  </h3>
+                  <p className="text-[11px] font-mono text-ink-faint uppercase tracking-mono">
+                    Forensic Canary Security
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-ink-soft leading-relaxed">
+                Canary Watermarking injects invisible, zero-width cryptographic markers tied to your verified Member Ledger. In order to trace leaks to specific recipients and securely store attribution records in your Vault, an active member session is required.
+              </p>
+
+              <div className="p-3 rounded border border-rule bg-kraft/40 text-[11px] text-ink-soft space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-ink">
+                  <Lock className="w-3.5 h-3.5 text-moss" />
+                  <span>Encrypted Ledger Guarantee</span>
+                </div>
+                <p>
+                  Each recipient token is cryptographically isolated and recorded in your private ledger for future authenticity verification.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAuthModal(false)}
+                  className="px-4 py-2 text-xs font-mono rounded border border-rule bg-paper hover:bg-kraft text-ink transition-colors min-h-[40px]"
+                >
+                  Cancel
+                </button>
+                <Link
+                  to="/login"
+                  state={{ from: location }}
+                  className="px-5 py-2 text-xs font-semibold rounded bg-red text-vellum hover:bg-red-dark shadow-ink-button transition-colors text-center min-h-[40px] flex items-center justify-center"
+                >
+                  Sign In to Continue
+                </Link>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
