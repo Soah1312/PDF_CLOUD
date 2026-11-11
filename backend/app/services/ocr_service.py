@@ -53,6 +53,28 @@ def _ensure_ocr_system_dependencies_on_path():
                 candidate_tessdata_app = os.path.join(user_profile, "scoop", "apps", "tesseract", "current", "tessdata")
                 if os.path.exists(candidate_tessdata_app):
                     os.environ["TESSDATA_PREFIX"] = candidate_tessdata_app
+    else:
+        # Linux / Amazon Linux 2023: Ensure system directories are included in PATH
+        extra_linux_paths = ["/usr/local/bin", "/usr/bin", "/bin", "/usr/local/sbin", "/usr/sbin"]
+        current_path = os.environ.get("PATH", "")
+        existing_parts = set(current_path.split(":"))
+        paths_to_add = [p for p in extra_linux_paths if os.path.exists(p) and p not in existing_parts]
+        if paths_to_add:
+            os.environ["PATH"] = ":".join(paths_to_add) + ":" + current_path
+
+        # Resolve TESSDATA_PREFIX if not explicitly configured in environment
+        if "TESSDATA_PREFIX" not in os.environ:
+            candidates = [
+                "/usr/local/share/tessdata",
+                "/usr/share/tessdata",
+                "/usr/share/tesseract/tessdata",
+                "/usr/share/tesseract-ocr/5/tessdata",
+                "/usr/share/tesseract-ocr/4.00/tessdata",
+            ]
+            for c in candidates:
+                if os.path.exists(c):
+                    os.environ["TESSDATA_PREFIX"] = c
+                    break
 
 
 _ensure_ocr_system_dependencies_on_path()
@@ -130,9 +152,12 @@ class OCRmyPDFEngine:
 
     @classmethod
     def is_engine_available(cls) -> bool:
-        """Checks if OCRmyPDF and Tesseract are accessible."""
+        """Checks if OCRmyPDF and required system binaries (tesseract, gs, qpdf) are accessible."""
         _ensure_ocr_system_dependencies_on_path()
-        return shutil.which("tesseract") is not None
+        has_tesseract = shutil.which("tesseract") is not None
+        has_gs = (shutil.which("gs") or shutil.which("gswin64c")) is not None
+        has_qpdf = shutil.which("qpdf") is not None
+        return has_tesseract and has_gs and has_qpdf
 
     @classmethod
     def generate_searchable_pdf(
@@ -147,6 +172,22 @@ class OCRmyPDFEngine:
         """
         _ensure_ocr_system_dependencies_on_path()
 
+        # Check required system binaries before execution
+        missing_binaries = []
+        if not shutil.which("tesseract"):
+            missing_binaries.append("tesseract")
+        if not (shutil.which("gs") or shutil.which("gswin64c")):
+            missing_binaries.append("ghostscript (gs)")
+        if not shutil.which("qpdf"):
+            missing_binaries.append("qpdf")
+
+        if missing_binaries:
+            missing_str = ", ".join(missing_binaries)
+            raise RuntimeError(
+                f"Missing required system OCR dependencies on host: {missing_str}. "
+                "Install on Amazon Linux 2023 with: sudo dnf install -y spal-release && sudo dnf install -y tesseract tesseract-langpack-eng qpdf ghostscript"
+            )
+
         with tempfile.TemporaryDirectory() as temp_dir:
             input_file = os.path.join(temp_dir, "input.pdf")
             output_file = os.path.join(temp_dir, "output.pdf")
@@ -160,6 +201,9 @@ class OCRmyPDFEngine:
                 "language": language or config.OCR_DEFAULT_LANGUAGE,
                 "output_type": "pdf",
                 "progress_bar": False,
+                "jobs": 1,
+                "use_threads": True,
+                "invalidate_digital_signatures": True,
             }
 
             if force_ocr:
@@ -183,10 +227,33 @@ class OCRmyPDFEngine:
             except ocr_exceptions.EncryptedPdfError:
                 raise ValueError("Cannot OCR password-protected or encrypted PDF document.")
             except ocr_exceptions.InputFileError as e:
-                raise ValueError(f"Invalid PDF input file: {e}")
+                err_detail = (e.args[0] if e.args else None) or getattr(e, "message", None) or str(e)
+                raise ValueError(f"Invalid PDF input file: {err_detail}")
             except Exception as e:
-                logger.error(f"[OCRmyPDF] OCR processing failed: {e}", exc_info=True)
-                raise RuntimeError(f"OCR processing failed: {e}")
+                # If rotation failed (e.g. missing osd.traineddata on host), retry without rotation
+                if ocr_kwargs.get("rotate_pages"):
+                    logger.warning(f"[OCRmyPDF] OCR failed with rotate_pages=True. Retrying with rotate_pages=False... Cause: {e}")
+                    ocr_kwargs["rotate_pages"] = False
+                    try:
+                        exit_code = ocrmypdf.ocr(**ocr_kwargs)
+                    except Exception as retry_err:
+                        err_detail = (
+                            (retry_err.args[0] if (retry_err.args and len(retry_err.args) > 0) else None)
+                            or getattr(retry_err, "message", None)
+                            or str(retry_err)
+                            or repr(retry_err)
+                        )
+                        logger.error(f"[OCRmyPDF] OCR retry failed: {err_detail}", exc_info=True)
+                        raise RuntimeError(f"OCR processing failed: {err_detail}")
+                else:
+                    err_detail = (
+                        (e.args[0] if (e.args and len(e.args) > 0) else None)
+                        or getattr(e, "message", None)
+                        or str(e)
+                        or repr(e)
+                    )
+                    logger.error(f"[OCRmyPDF] OCR processing failed: {err_detail}", exc_info=True)
+                    raise RuntimeError(f"OCR processing failed: {err_detail}")
 
             if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
                 raise RuntimeError("OCRmyPDF did not produce a valid output PDF file.")

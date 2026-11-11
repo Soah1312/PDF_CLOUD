@@ -1,4 +1,5 @@
 import logging
+import shutil
 from typing import Dict, Any
 from fastapi import APIRouter
 from sqlalchemy import text
@@ -27,12 +28,19 @@ def get_health() -> Dict[str, Any]:
     cognito_configured = bool(config.COGNITO_USER_POOL_ID and config.COGNITO_CLIENT_ID)
     ssm_enabled = bool(config.USE_SSM_CONFIG)
 
+    ocr_binaries = {
+        "tesseract": bool(shutil.which("tesseract")),
+        "ghostscript": bool(shutil.which("gs") or shutil.which("gswin64c")),
+        "qpdf": bool(shutil.which("qpdf")),
+    }
+
     return {
         "status": "healthy" if database_connected else "degraded",
         "environment": config.ENVIRONMENT,
         "database_connected": database_connected,
         "ssm_enabled": ssm_enabled,
         "cognito_configured": cognito_configured,
+        "ocr_binaries": ocr_binaries,
         "region": config.AWS_REGION,
     }
 

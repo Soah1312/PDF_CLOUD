@@ -65,6 +65,26 @@ pdftoppm -v
 
 ---
 
+## 3.1 Install OCR System Dependencies (Tesseract, Ghostscript, QPDF)
+
+OCRmyPDF requires **Tesseract OCR**, **Ghostscript (`gs`)**, and **QPDF**.
+On Amazon Linux 2023, install the official AWS SPAL (Supplementary Packages for Amazon Linux) repository to obtain `tesseract`, `tesseract-langpack-eng`, `ghostscript`, and `qpdf`:
+
+```bash
+# 1. Install SPAL repository (EPEL 9 packages built for AL2023)
+sudo dnf install -y spal-release
+
+# 2. Install Tesseract, English language pack, Ghostscript, and QPDF
+sudo dnf install -y tesseract tesseract-langpack-eng ghostscript qpdf
+
+# 3. Verify installations
+tesseract --version
+gs --version
+qpdf --version
+```
+
+---
+
 ## 4. Install Headless LibreOffice on Amazon Linux 2023
 
 Amazon Linux 2023 core repositories do not include LibreOffice. Install the official Document Foundation RPMs to support headless Word-to-PDF (`pdf2docx` / `soffice`) conversion:
