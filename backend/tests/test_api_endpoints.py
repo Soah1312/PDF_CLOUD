@@ -263,3 +263,42 @@ def test_guest_expiration_handling():
     res = client.get(f"/api/v1/files/{job_id}", headers={"X-Guest-Session-ID": expired_sess})
     assert res.status_code == 410
     assert "expired" in res.json()["detail"].lower()
+
+
+def test_watermark_endpoint_accepts_watermark_text_param():
+    pdf_bytes = make_pdf(1, "Watermark Test Document")
+    res = client.post(
+        "/api/v1/pdf/watermark",
+        files={"file": ("test.pdf", pdf_bytes, "application/pdf")},
+        data={
+            "watermark_text": "TOP SECRET",
+            "opacity": 0.5,
+            "rotation": 45,
+            "color": "#D9441F",
+        },
+        headers={"X-Guest-Session-ID": str(uuid.uuid4())}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "COMPLETED"
+    assert "watermarked_test.pdf" in data["output_filename"]
+
+
+def test_watermark_endpoint_accepts_text_param():
+    pdf_bytes = make_pdf(1, "Watermark Test Document")
+    res = client.post(
+        "/api/v1/pdf/watermark",
+        files={"file": ("sample.pdf", pdf_bytes, "application/pdf")},
+        data={
+            "text": "INTERNAL ONLY",
+            "opacity": 0.3,
+            "rotation": 30,
+            "color": "#888888",
+        },
+        headers={"X-Guest-Session-ID": str(uuid.uuid4())}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "COMPLETED"
+    assert "watermarked_sample.pdf" in data["output_filename"]
+

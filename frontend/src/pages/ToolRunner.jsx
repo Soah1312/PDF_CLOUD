@@ -59,6 +59,7 @@ import {
   processWordToPdf,
   embedCanaryWatermark,
   verifyCanaryDocument,
+  extractErrorMessage,
 } from '../services/api';
 import { BINDERY_TOOLS } from '../config/tools';
 import { renderPdfThumbnail, getPdfPageCount } from '../utils/pdfThumbnails';
@@ -543,16 +544,21 @@ export default function ToolRunner() {
       } else if (currentTool.id === 'compress') {
         formData.append('level', compressLevel);
       } else if (currentTool.id === 'watermark') {
-        formData.append('watermark_text', watermarkText);
+        const textToUse = (watermarkText || 'CONFIDENTIAL').trim();
+        formData.append('text', textToUse);
+        formData.append('watermark_text', textToUse);
         formData.append('opacity', watermarkOpacity);
         formData.append('rotation', watermarkRotation);
         formData.append('color', watermarkColor);
+        formData.append('position', 'center');
+        formData.append('font_size', 40);
       } else if (currentTool.id === 'split') {
         if (splitRange) {
           formData.append('page_ranges', splitRange);
         }
       } else if (currentTool.id === 'to-images') {
         formData.append('format', imageFormat);
+        formData.append('img_format', imageFormat);
         formData.append('dpi', imageDpi);
       } else if (currentTool.id === 'canary') {
         if (canaryRecipientName) formData.append('recipient_name', canaryRecipientName);
@@ -666,10 +672,7 @@ export default function ToolRunner() {
         setErrorMessage('Execution cancelled.');
       } else {
         console.error('Processing error:', err);
-        const detail =
-          err.response?.data?.detail ||
-          err.message ||
-          'Operation failed. Please verify file integrity.';
+        const detail = extractErrorMessage(err);
         if (typeof detail === 'string' && detail.toLowerCase().includes('password')) {
           setPdfPasswordPrompt(true);
         }
@@ -1311,7 +1314,9 @@ export default function ToolRunner() {
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red" />
                   <div>
                     <p className="font-semibold text-red">Document issue</p>
-                    <p className="text-ink-soft mt-0.5">{errorMessage}</p>
+                    <p className="text-ink-soft mt-0.5">
+                      {typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -2006,7 +2011,9 @@ export default function ToolRunner() {
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red" />
                     <div>
                       <p className="font-semibold text-red">Execution Warning</p>
-                      <p className="text-ink-soft mt-0.5">{errorMessage}</p>
+                      <p className="text-ink-soft mt-0.5">
+                        {typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)}
+                      </p>
                     </div>
                   </div>
                   <button

@@ -395,7 +395,8 @@ async def compress_pdf_endpoint(
 async def watermark_pdf_endpoint(
     response: Response,
     file: UploadFile = File(...),
-    text: str = Form(...),
+    text: Optional[str] = Form(None),
+    watermark_text: Optional[str] = Form(None),
     font_size: int = Form(40),
     opacity: float = Form(0.3),
     rotation: float = Form(45.0),
@@ -413,6 +414,10 @@ async def watermark_pdf_endpoint(
     content = await file.read()
     orig_name = sanitize_filename(file.filename or "document.pdf")
     out_name = f"watermarked_{orig_name}"
+
+    resolved_text = (text or watermark_text or "CONFIDENTIAL").strip()
+    if not resolved_text:
+        resolved_text = "CONFIDENTIAL"
 
     if cognito_sub:
         raw_key = storage_service.build_user_raw_key(cognito_sub, orig_name)
@@ -437,7 +442,7 @@ async def watermark_pdf_endpoint(
         pages_list = [int(p.strip()) for p in pages.split(",") if p.strip()] if pages else None
         watermarked_bytes = pdf_engine.watermark_pdf(
             file_bytes=content,
-            text=text,
+            text=resolved_text,
             font_size=font_size,
             opacity=opacity,
             rotation=rotation,
@@ -475,7 +480,8 @@ async def watermark_pdf_endpoint(
 async def pdf_to_images_endpoint(
     response: Response,
     file: UploadFile = File(...),
-    img_format: str = Form("png"),
+    img_format: Optional[str] = Form(None),
+    format: Optional[str] = Form(None),
     dpi: int = Form(150),
     x_guest_session_id: Optional[str] = Header(None),
     user: Optional[User] = Depends(get_optional_user),
@@ -487,6 +493,7 @@ async def pdf_to_images_endpoint(
 
     content = await file.read()
     orig_name = sanitize_filename(file.filename or "document.pdf")
+    resolved_format = (img_format or format or "png").lower().strip()
 
     if cognito_sub:
         raw_key = storage_service.build_user_raw_key(cognito_sub, orig_name)
@@ -508,7 +515,7 @@ async def pdf_to_images_endpoint(
     try:
         out_bytes, out_name, ctype = pdf_engine.pdf_to_images(
             file_bytes=content,
-            img_format=img_format,
+            img_format=resolved_format,
             dpi=dpi,
             original_filename=orig_name
         )

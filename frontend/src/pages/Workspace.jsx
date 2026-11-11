@@ -9,6 +9,7 @@ import {
   deleteFile,
   fetchCanaryTokens,
   revokeCanaryToken,
+  extractErrorMessage,
 } from '../services/api';
 import {
   FolderLock,
@@ -146,7 +147,7 @@ export default function Workspace() {
       setMessage(`Successfully archived '${file.name}' to Vault.`);
       await loadData();
     } catch (err) {
-      setErrorMessage(err.response?.data?.detail || 'Failed to upload document.');
+      setErrorMessage(extractErrorMessage(err, 'Failed to upload document.'));
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -250,7 +251,7 @@ export default function Workspace() {
       setMessage(`Successfully revoked canary token '${tokenId}'.`);
       await loadData();
     } catch (err) {
-      setErrorMessage(err.response?.data?.detail || 'Failed to revoke canary token.');
+      setErrorMessage(extractErrorMessage(err, 'Failed to revoke canary token.'));
     }
   };
 
@@ -367,7 +368,7 @@ export default function Workspace() {
           <div className="p-3 rounded border border-red/40 bg-red/10 text-xs text-ink flex items-center justify-between">
             <span className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-red shrink-0" />
-              <span>{errorMessage}</span>
+              <span>{typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)}</span>
             </span>
             <button onClick={() => setErrorMessage('')} className="text-ink-soft hover:text-ink">
               <X className="w-3.5 h-3.5" />

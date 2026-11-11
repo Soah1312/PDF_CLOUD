@@ -1,7 +1,7 @@
 // Service Worker for CloudPDF Studio — The Bindery
 // Caches application shell and typography only. Strictly ZERO document or API persistence.
 
-const CACHE_NAME = 'cloudpdf-shell-v1';
+const CACHE_NAME = 'cloudpdf-shell-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -50,7 +50,8 @@ self.addEventListener('fetch', (event) => {
         const cachedResponse = await cache.match(event.request);
         const fetchPromise = fetch(event.request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
-            cache.put(event.request, networkResponse.clone());
+            const responseToCache = networkResponse.clone();
+            cache.put(event.request, responseToCache).catch(() => {});
           }
           return networkResponse;
         }).catch(() => cachedResponse);
@@ -70,7 +71,8 @@ self.addEventListener('fetch', (event) => {
       caches.match(event.request).then((cached) => {
         const fetchPromise = fetch(event.request).then((network) => {
           if (network && network.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, network.clone()));
+            const responseToCache = network.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache)).catch(() => {});
           }
           return network;
         }).catch(() => cached);

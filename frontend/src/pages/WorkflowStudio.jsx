@@ -36,6 +36,7 @@ import {
   updateWorkflow,
   deleteWorkflow,
   runWorkflowPipeline,
+  extractErrorMessage,
 } from '../services/api';
 import { motionBus } from '../utils/motion';
 
@@ -341,7 +342,7 @@ export default function WorkflowStudio() {
       }
       await loadSavedWorkflows();
     } catch (err) {
-      setNotification(err.response?.data?.detail || 'Failed to save pipeline blueprint.');
+      setNotification(extractErrorMessage(err, 'Failed to save pipeline blueprint.'));
     }
   };
 
@@ -426,11 +427,11 @@ export default function WorkflowStudio() {
       }, 400);
       console.error('Pipeline execution error:', err);
       const detail = err.response?.data?.detail;
-      if (detail && typeof detail === 'object') {
-        setExecutionError(detail.message || 'Pipeline failed.');
+      if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+        setExecutionError(detail.message || detail.msg || extractErrorMessage(err, 'Pipeline failed.'));
         if (detail.step_results) setStepExecutions(detail.step_results);
       } else {
-        setExecutionError(detail || err.message || 'Pipeline execution failed.');
+        setExecutionError(extractErrorMessage(err, 'Pipeline execution failed.'));
       }
     } finally {
       setIsExecuting(false);

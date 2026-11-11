@@ -34,6 +34,7 @@ import {
   downloadOcrPdf,
   fetchOcrPdfBlob,
   fetchOcrJobs,
+  extractErrorMessage,
 } from '../services/api';
 import { loadPdfDocument, renderPdfPageToCanvas } from '../utils/pdfThumbnails';
 import DocumentPreviewModal from '../components/common/DocumentPreviewModal';
@@ -377,7 +378,7 @@ export const OCRStudio = () => {
       startPolling(resp.job_id);
     } catch (err) {
       console.error('[OCRStudio] Submission failed:', err);
-      const detail = err.response?.data?.detail || err.message || 'Failed to initiate OCR job.';
+      const detail = extractErrorMessage(err, 'Failed to initiate OCR job.');
       setErrorMessage(detail);
       setIsProcessing(false);
     }
@@ -563,7 +564,7 @@ export const OCRStudio = () => {
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red" />
           <div className="flex-1">
             <span className="font-semibold block mb-0.5">Processing Notification:</span>
-            <span>{errorMessage}</span>
+            <span>{typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)}</span>
           </div>
           <button
             onClick={() => setErrorMessage('')}

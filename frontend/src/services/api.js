@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create configured Axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_API_URL) || '',
   timeout: 60000, // 60s for processing large files
 });
 
@@ -338,6 +338,35 @@ export const fetchOcrJobs = async () => {
   }
   const response = await api.get('/api/v1/ocr/jobs', { headers });
   return response.data;
+};
+
+// Extract safe human-readable error message from Axios / API errors, guaranteeing string type (no objects/arrays)
+export const extractErrorMessage = (err, fallback = 'Operation failed. Please verify file integrity.') => {
+  if (!err) return fallback;
+  const detail = err.response?.data?.detail ?? err.response?.data?.message ?? err.message;
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return (
+      detail
+        .map((item) => {
+          if (!item) return '';
+          if (typeof item === 'string') return item;
+          if (typeof item === 'object') {
+            const loc = Array.isArray(item.loc) ? item.loc.filter((l) => l !== 'body').join('.') : '';
+            const msg = item.msg || item.message || JSON.stringify(item);
+            return loc ? `${loc}: ${msg}` : msg;
+          }
+          return String(item);
+        })
+        .filter(Boolean)
+        .join('; ') || fallback
+    );
+  }
+  if (typeof detail === 'object') {
+    return detail.msg || detail.message || detail.detail || JSON.stringify(detail);
+  }
+  return String(detail);
 };
 
 export default api;
