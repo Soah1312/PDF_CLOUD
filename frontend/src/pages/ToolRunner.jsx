@@ -39,6 +39,11 @@ import {
   Check,
   CheckSquare,
   Square,
+  LayoutGrid,
+  List,
+  ArrowUpDown,
+  MoveLeft,
+  MoveRight,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -118,6 +123,11 @@ export default function ToolRunner() {
   const [canaryRecipientEmail, setCanaryRecipientEmail] = useState('');
   const [canaryOrganization, setCanaryOrganization] = useState('');
   const [canaryTrackingNote, setCanaryTrackingNote] = useState('');
+
+  // Images to PDF specific state
+  const [imageLayoutView, setImageLayoutView] = useState('grid'); // 'grid' | 'list'
+  const [imageOrientation, setImageOrientation] = useState('auto'); // 'auto' | 'portrait' | 'landscape'
+  const [imageMarginMode, setImageMarginMode] = useState('none'); // 'none' | 'framed'
 
   // Password-protected PDF prompt state
   const [pdfPasswordPrompt, setPdfPasswordPrompt] = useState(false);
@@ -346,6 +356,26 @@ export default function ToolRunner() {
     });
   };
 
+  const sortImagesByName = (ascending = true) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+    setSelectedFiles((prev) => {
+      const sorted = [...prev].sort((a, b) => {
+        const cmp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        return ascending ? cmp : -cmp;
+      });
+      return sorted;
+    });
+  };
+
+  const reverseImageOrder = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+    setSelectedFiles((prev) => [...prev].reverse());
+  };
+
   // Convert Set of page numbers into comma-separated ranges e.g. "1, 3, 5-8"
   const formatRangesFromSet = (setOfNumbers) => {
     const sorted = Array.from(setOfNumbers).sort((a, b) => a - b);
@@ -507,6 +537,10 @@ export default function ToolRunner() {
         if (canaryRecipientEmail) formData.append('recipient_email', canaryRecipientEmail);
         if (canaryOrganization) formData.append('organization', canaryOrganization);
         if (canaryTrackingNote) formData.append('tracking_note', canaryTrackingNote);
+      } else if (currentTool.id === 'from-images') {
+        formData.append('file_order', JSON.stringify(selectedFiles.map((f) => f.name)));
+        formData.append('orientation', imageOrientation);
+        formData.append('margin_mode', imageMarginMode);
       }
 
       setProcessingStage(
@@ -514,13 +548,15 @@ export default function ToolRunner() {
           ? 'Compressing content streams & font subsets...'
           : currentTool.id === 'merge'
           ? 'Binding and interleaving folios...'
+          : currentTool.id === 'from-images'
+          ? `Compiling ${selectedFiles.length} image plates into PDF booklet...`
           : currentTool.id === 'canary'
           ? 'Computing SHA-256 and embedding invisible markers...'
           : 'Processing document on bench...'
       );
 
       let procState = 'processing:generic';
-      if (currentTool.id === 'merge') procState = 'processing:merge';
+      if (currentTool.id === 'merge' || currentTool.id === 'from-images') procState = 'processing:merge';
       else if (currentTool.id === 'split') procState = 'processing:split';
       else if (currentTool.id === 'compress') procState = 'processing:compress';
       motionBus.emit('pressroom:state', procState);
@@ -604,6 +640,8 @@ export default function ToolRunner() {
         return `"${watermarkText}" • ${Math.round(watermarkOpacity * 100)}%`;
       case 'to-images':
         return `${imageFormat.toUpperCase()} • ${imageDpi} DPI`;
+      case 'from-images':
+        return `${selectedFiles.length} image plates • ${imageOrientation === 'auto' ? 'Auto orientation' : imageOrientation}`;
       case 'canary':
         return canaryRecipientName ? `${canaryRecipientName}` : 'Forensic SHA-256';
       default:
@@ -944,6 +982,77 @@ export default function ToolRunner() {
             placeholder="Classification note (e.g. M&A Draft)"
             className="w-full px-3 py-2 rounded border border-rule bg-paper text-sm sm:text-xs text-ink min-h-[44px]"
           />
+        </div>
+      )}
+
+      {/* 8. FROM-IMAGES OPTIONS */}
+      {currentTool.id === 'from-images' && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Page Orientation
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'auto', label: 'Auto' },
+                { id: 'portrait', label: 'Portrait' },
+                { id: 'landscape', label: 'Landscape' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setImageOrientation(opt.id)}
+                  className={`py-2 px-1 text-xs font-mono rounded border transition-colors min-h-[40px] ${
+                    imageOrientation === opt.id
+                      ? 'bg-kraft border-rule-strong text-ink font-semibold'
+                      : 'bg-paper border-rule text-ink-soft hover:bg-kraft/50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Page Margins
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'none', label: 'Full Bleed' },
+                { id: 'framed', label: 'Framed Margin' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setImageMarginMode(opt.id)}
+                  className={`py-2 px-1 text-xs font-mono rounded border transition-colors min-h-[40px] ${
+                    imageMarginMode === opt.id
+                      ? 'bg-kraft border-rule-strong text-ink font-semibold'
+                      : 'bg-paper border-rule text-ink-soft hover:bg-kraft/50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-rule space-y-2 text-xs font-mono text-ink-soft">
+            <div className="flex justify-between">
+              <span className="text-ink-faint">Total Folios:</span>
+              <span className="font-semibold text-ink">{selectedFiles.length} Pages</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-faint">Combined Size:</span>
+              <span className="font-semibold text-ink">{formatBytes(totalBytes)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-ink-faint">Fidelity:</span>
+              <span className="font-semibold text-moss">100% Original DPI</span>
+            </div>
+          </div>
         </div>
       )}
     </>
@@ -1476,8 +1585,248 @@ export default function ToolRunner() {
                 </div>
               )}
 
+              {/* 3. FROM-IMAGES: Multi-Image Sequencing Desk (Grid & List View) */}
+              {currentTool.id === 'from-images' && (
+                <div className="space-y-4">
+                  {/* Sequence Helper Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded border border-rule bg-paper text-xs">
+                    <div>
+                      <p className="font-semibold text-ink">
+                        Sequence of Image Plates ({selectedFiles.length} pages in compiled PDF)
+                      </p>
+                      <p className="text-[11px] text-ink-soft mt-0.5 font-mono">
+                        Each image becomes 1 page in order. Reorder using arrows or quick sort buttons.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Quick Sort Actions */}
+                      <button
+                        type="button"
+                        onClick={() => sortImagesByName(true)}
+                        className="px-2.5 py-1 text-[11px] font-mono rounded border border-rule bg-vellum hover:bg-kraft text-ink transition-colors flex items-center gap-1"
+                        title="Sort images alphabetically (A to Z)"
+                      >
+                        <ArrowUpDown className="w-3 h-3" />
+                        <span>Sort A–Z</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={reverseImageOrder}
+                        className="px-2.5 py-1 text-[11px] font-mono rounded border border-rule bg-vellum hover:bg-kraft text-ink transition-colors"
+                        title="Reverse image sequence"
+                      >
+                        Reverse
+                      </button>
+
+                      {/* View Mode Switcher */}
+                      <div className="flex items-center rounded border border-rule bg-vellum p-0.5 ml-1">
+                        <button
+                          type="button"
+                          onClick={() => setImageLayoutView('grid')}
+                          className={`p-1 rounded transition-colors ${
+                            imageLayoutView === 'grid'
+                              ? 'bg-ink text-paper shadow-sm'
+                              : 'text-ink-soft hover:text-ink'
+                          }`}
+                          title="Grid View"
+                        >
+                          <LayoutGrid className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImageLayoutView('list')}
+                          className={`p-1 rounded transition-colors ${
+                            imageLayoutView === 'list'
+                              ? 'bg-ink text-paper shadow-sm'
+                              : 'text-ink-soft hover:text-ink'
+                          }`}
+                          title="List View"
+                        >
+                          <List className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* GRID VIEW */}
+                  {imageLayoutView === 'grid' ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+                      {selectedFiles.map((file, idx) => {
+                        const thumbKey = `${file.name}-${file.size}`;
+                        const thumb = thumbnails[thumbKey];
+                        const isCollapsing = collapsingIds.has(thumbKey);
+
+                        return (
+                          <div
+                            key={`${file.name}-${idx}`}
+                            className={`relative flex flex-col justify-between p-3 rounded border border-rule bg-vellum hover:border-rule-strong hover:shadow-subtle transition-all duration-200 group ${
+                              isCollapsing ? 'file-card-collapsing' : ''
+                            }`}
+                            style={{ animationDelay: `${idx * 25}ms` }}
+                          >
+                            {/* Header: Page Badge & Delete Button */}
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="px-2 py-0.5 rounded bg-kraft border border-rule text-[11px] font-mono font-semibold text-ink">
+                                Page {idx + 1}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => removeFile(idx, thumbKey)}
+                                className="p-1 rounded border border-transparent hover:border-red/30 hover:bg-red/10 text-ink-faint hover:text-red transition-colors"
+                                title="Remove image plate"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Thumbnail Frame */}
+                            <div className="aspect-[4/3] rounded border border-rule bg-paper overflow-hidden flex items-center justify-center relative shadow-sm">
+                              {thumb ? (
+                                <img
+                                  src={thumb}
+                                  alt={file.name}
+                                  className="w-full h-full object-contain p-1"
+                                />
+                              ) : (
+                                <div className="flex flex-col items-center justify-center p-2 text-ink-faint">
+                                  <FileImage className="w-6 h-6 mb-1" />
+                                  <span className="text-[9px] font-mono">Loading...</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Title & Metadata */}
+                            <div className="mt-2.5 truncate">
+                              <p className="text-xs font-medium text-ink truncate" title={file.name}>
+                                {file.name}
+                              </p>
+                              <p className="text-[10px] font-mono text-ink-soft tabular-nums mt-0.5">
+                                {formatBytes(file.size)}
+                              </p>
+                            </div>
+
+                            {/* Reorder Arrows Footer */}
+                            <div className="flex items-center justify-between pt-2 mt-2 border-t border-rule/60 text-[10px] font-mono text-ink-soft">
+                              <button
+                                type="button"
+                                onClick={() => moveFile(idx, -1)}
+                                disabled={idx === 0}
+                                className="px-2 py-1 rounded border border-rule bg-paper hover:bg-kraft text-ink disabled:opacity-30 flex items-center gap-1 transition-colors"
+                                title="Move earlier in sequence"
+                              >
+                                <MoveLeft className="w-3 h-3" />
+                                <span>Prev</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => moveFile(idx, 1)}
+                                disabled={idx === selectedFiles.length - 1}
+                                className="px-2 py-1 rounded border border-rule bg-paper hover:bg-kraft text-ink disabled:opacity-30 flex items-center gap-1 transition-colors"
+                                title="Move later in sequence"
+                              >
+                                <span>Next</span>
+                                <MoveRight className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    /* LIST VIEW */
+                    <div className="space-y-2">
+                      {selectedFiles.map((file, idx) => {
+                        const thumbKey = `${file.name}-${file.size}`;
+                        const thumb = thumbnails[thumbKey];
+                        const isCollapsing = collapsingIds.has(thumbKey);
+
+                        return (
+                          <div
+                            key={`${file.name}-${idx}`}
+                            className={`relative flex items-center justify-between p-3 rounded border border-rule bg-vellum hover:border-rule-strong hover:shadow-subtle transition-all duration-200 group ${
+                              isCollapsing ? 'file-card-collapsing' : ''
+                            }`}
+                            style={{ animationDelay: `${idx * 25}ms` }}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="font-mono text-xs font-semibold text-ink-faint w-6 text-right shrink-0">
+                                {idx + 1}.
+                              </span>
+
+                              <div className="w-12 h-14 rounded border border-rule bg-paper flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                                {thumb ? (
+                                  <img
+                                    src={thumb}
+                                    alt={file.name}
+                                    className="w-full h-full object-contain p-0.5"
+                                  />
+                                ) : (
+                                  <FileImage className="w-5 h-5 text-ink-faint" />
+                                )}
+                              </div>
+
+                              <div className="truncate">
+                                <p className="text-xs font-medium text-ink truncate" title={file.name}>
+                                  {file.name}
+                                </p>
+                                <p className="text-[11px] font-mono text-ink-soft tabular-nums mt-0.5">
+                                  {formatBytes(file.size)} • Page {idx + 1} of {selectedFiles.length}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Controls */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => moveFileToEdge(idx, true)}
+                                disabled={idx === 0}
+                                className="px-2 py-1 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30 text-[10px] font-mono"
+                                title="Move to first page"
+                              >
+                                Top
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveFile(idx, -1)}
+                                disabled={idx === 0}
+                                className="p-1.5 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30"
+                                title="Move up"
+                              >
+                                <MoveUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveFile(idx, 1)}
+                                disabled={idx === selectedFiles.length - 1}
+                                className="p-1.5 rounded border border-rule hover:bg-kraft text-ink-soft disabled:opacity-30"
+                                title="Move down"
+                              >
+                                <MoveDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeFile(idx, thumbKey)}
+                                className="p-1.5 rounded border border-rule hover:bg-red/10 text-red ml-1"
+                                title="Remove image"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Generic Single Document Presentation for other tools */}
-              {currentTool.id !== 'merge' && currentTool.id !== 'split' && (
+              {currentTool.id !== 'merge' && currentTool.id !== 'split' && currentTool.id !== 'from-images' && (
                 <div className="p-4 rounded border border-rule bg-vellum flex items-center gap-4">
                   <div className="w-14 h-20 rounded border border-rule bg-paper shadow-sm flex items-center justify-center shrink-0 overflow-hidden">
                     {thumbnails[`${selectedFiles[0]?.name}-${selectedFiles[0]?.size}`] ? (
@@ -1498,7 +1847,7 @@ export default function ToolRunner() {
                       {formatBytes(selectedFiles[0]?.size)}
                     </p>
                     <p className="text-[11px] text-ink-faint mt-1 font-mono">
-                      Ready for {currentTool.verb} operation on isolated RAM namespace.
+                      Ready for {currentTool.verb} operation.
                     </p>
                   </div>
                 </div>
