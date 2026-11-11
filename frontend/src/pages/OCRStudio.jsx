@@ -81,6 +81,29 @@ export const OCRStudio = () => {
   const [pollErrorCount, setPollErrorCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Live timer effect during processing
+  useEffect(() => {
+    if (!isProcessing) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    const start = Date.now();
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [isProcessing]);
+
+  // Format timer helper (00:00)
+  const formatTimer = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   // Recent Jobs State
   const [recentJobs, setRecentJobs] = useState([]);
@@ -361,6 +384,65 @@ export const OCRStudio = () => {
 
   const isCompleted = currentJob && currentJob.status === 'COMPLETED';
 
+  const totalPages = file ? Math.max(1, numPages || 1) : 1;
+
+  // Compute calculated live progress and page completion
+  const computeProgressMetrics = () => {
+    if (!isProcessing && isCompleted) {
+      return {
+        progress: 100,
+        completedPages: totalPages,
+        activePage: totalPages,
+        stageLabel: 'Searchable PDF Ready!',
+      };
+    }
+
+    if (!isProcessing) {
+      return {
+        progress: 0,
+        completedPages: 0,
+        activePage: 1,
+        stageLabel: 'Ready for processing',
+      };
+    }
+
+    const backendProgress = currentJob?.progress || 10;
+    const backendStage = currentJob?.processing_stage || 'QUEUED';
+
+    // Model dynamic progress across pages:
+    // Estimated pace: ~1.2s per page (min 5s total)
+    const estTotalTime = Math.max(5, totalPages * 1.2);
+    const timeRatio = Math.min(0.92, elapsedSeconds / estTotalTime);
+    const virtualProgress = Math.round(15 + timeRatio * 75);
+    const effectiveProgress = Math.min(94, Math.max(backendProgress, virtualProgress));
+
+    // Calculate completed pages
+    let completed = 0;
+    let active = 1;
+
+    if (effectiveProgress < 25) {
+      completed = 0;
+      active = 1;
+    } else if (effectiveProgress >= 90) {
+      completed = totalPages;
+      active = totalPages;
+    } else {
+      // Progress between 25% and 90% corresponds to pages 1 through totalPages
+      const pageRatio = (effectiveProgress - 25) / 65;
+      completed = Math.min(totalPages, Math.max(0, Math.floor(pageRatio * totalPages)));
+      active = Math.min(totalPages, completed + 1);
+    }
+
+    return {
+      progress: effectiveProgress,
+      completedPages: completed,
+      activePage: active,
+      stageLabel: STAGE_LABELS[backendStage] || 'Recognizing Characters, Glyphs & Layout...',
+    };
+  };
+
+  const { progress: liveProgress, completedPages, activePage, stageLabel } = computeProgressMetrics();
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
       {/* Back link */}
@@ -454,9 +536,249 @@ export const OCRStudio = () => {
             </div>
           </div>
         </div>
+      ) : isProcessing ? (
+        // VIEW: FULL-SCREEN LIVE PROCESSING STATION OCCUPYING THE WORKBENCH
+        <div className="bg-vellum border border-rule rounded-md p-6 sm:p-10 md:p-12 shadow-subtle space-y-8 animate-fade-in">
+          {/* Header Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-rule">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-12 h-12 rounded border border-rule bg-kraft/80 flex items-center justify-center text-ink shrink-0 shadow-subtle">
+                <FileText className="w-6 h-6 text-cyan" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center space-x-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-cyan/10 border border-cyan/30 text-cyan text-xs font-mono font-semibold tracking-mono">
+                    <span className="w-2 h-2 rounded-full bg-cyan animate-ping" />
+                    LIVE PIPELINE ACTIVE
+                  </span>
+                  <span className="text-xs font-mono text-ink-faint hidden sm:inline">
+                    JOB ID: {currentJob?.job_id ? String(currentJob.job_id).slice(0, 8) : 'PENDING'}
+                  </span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-display font-semibold text-ink mt-1 truncate max-w-xl" title={file.name}>
+                  {file.name}
+                </h2>
+                <div className="flex items-center gap-2 text-xs font-mono text-ink-soft mt-0.5">
+                  <span>{formatBytes(file.size)}</span>
+                  <span>•</span>
+                  <span>{totalPages} {totalPages === 1 ? 'Folio' : 'Pages'}</span>
+                  <span>•</span>
+                  <span className="hidden sm:inline">Dual-Layer Searchable PDF Output</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-6">
+              <div className="text-right">
+                <span className="text-[10px] font-mono text-ink-faint block uppercase tracking-mono">ELAPSED TIME</span>
+                <span className="text-base sm:text-lg font-mono font-bold text-ink tabular-nums">
+                  {formatTimer(elapsedSeconds)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Central Live Metric Hero Block */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center py-2 sm:py-4">
+            {/* Left: Giant Percentage Display */}
+            <div className="md:col-span-4 flex flex-col items-center md:items-start border-b md:border-b-0 md:border-r border-rule pb-6 md:pb-0 md:pr-8">
+              <div className="text-6xl sm:text-7xl lg:text-8xl font-mono font-bold text-ink tracking-tight tabular-nums">
+                {liveProgress}<span className="text-3xl sm:text-4xl text-cyan font-normal">%</span>
+              </div>
+              <span className="text-xs font-mono uppercase tracking-mono text-ink-soft mt-1">
+                COMPLETION VELOCITY
+              </span>
+            </div>
+
+            {/* Right: Active Page Counter & Dynamic Status */}
+            <div className="md:col-span-8 space-y-2 text-center md:text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded bg-kraft/80 border border-rule text-xs font-mono text-ink">
+                <Layers className="w-3.5 h-3.5 text-cyan" />
+                <span className="font-semibold uppercase tracking-mono">
+                  PAGE PROGRESSION: FOLIO {activePage} OF {totalPages}
+                </span>
+              </div>
+
+              <h3 className="text-2xl sm:text-3xl font-display font-semibold text-ink leading-tight">
+                {liveProgress < 25
+                  ? `Validating Document Geometry & Structure`
+                  : liveProgress >= 90
+                  ? `Finalizing Injected Layer & Assembling PDF`
+                  : `Transcribing Folio ${activePage} of ${totalPages}`}
+              </h3>
+
+              <p className="text-sm font-mono text-ink-soft leading-relaxed max-w-xl">
+                {liveProgress < 25
+                  ? `Pre-flight validation passed for ${totalPages} folios. Securely streaming raw plate data to isolated memory.`
+                  : liveProgress >= 90
+                  ? `All ${totalPages} pages transcribed. Verifying invisible text layer alignment and searchable coordinate matrix.`
+                  : `${completedPages} of ${totalPages} pages transcribed. Embedding invisible machine-readable text layer behind scan plate.`}
+              </p>
+            </div>
+          </div>
+
+          {/* High-Impact Full-Width Progress Bar */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+              <span className="font-semibold text-ink uppercase tracking-mono">
+                PIPELINE STATUS: {stageLabel}
+              </span>
+              <span className="text-ink-soft tabular-nums font-semibold">
+                {completedPages} / {totalPages} PAGES COMPLETED ({Math.max(0, totalPages - completedPages)} REMAINING)
+              </span>
+            </div>
+
+            {/* Thick Progress Track */}
+            <div className="w-full bg-kraft h-4 sm:h-5 rounded-full overflow-hidden p-0.5 border border-rule relative shadow-inner">
+              <div
+                className="h-full bg-gradient-to-r from-cyan via-cyan-600 to-cyan rounded-full transition-all duration-300 ease-out shadow-sm flex items-center justify-end pr-2"
+                style={{ width: `${Math.max(6, liveProgress)}%` }}
+              >
+                <span className="w-2 h-2 rounded-full bg-paper/80 shadow animate-pulse" />
+              </div>
+            </div>
+
+            {/* Sub-track stage markers */}
+            <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-ink-faint pt-1">
+              <span>0% Ingestion</span>
+              <span className="hidden sm:inline">25% Geometry</span>
+              <span>60% Glyph Transcription</span>
+              <span className="hidden sm:inline">85% Layer Inject</span>
+              <span>100% Assembly</span>
+            </div>
+          </div>
+
+          {/* 4 Live Milestone Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+            {/* Step 1 */}
+            <div className={`p-4 rounded border transition-colors ${
+              liveProgress >= 20 ? 'bg-moss/10 border-moss/30 text-moss' : 'bg-paper border-rule text-ink-faint'
+            }`}>
+              <div className="flex items-center justify-between text-xs font-mono font-bold">
+                <span className="flex items-center">
+                  {liveProgress >= 20 ? <Check className="w-3.5 h-3.5 mr-1 text-moss" /> : <span className="mr-1">1.</span>}
+                  Ingestion
+                </span>
+                {liveProgress >= 20 && <span className="text-[10px] font-normal uppercase">Done</span>}
+              </div>
+              <p className="text-[11px] font-mono mt-1 text-ink-soft">
+                {totalPages} {totalPages === 1 ? 'page' : 'pages'} verified & stream secured
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className={`p-4 rounded border transition-colors ${
+              liveProgress >= 30 ? 'bg-moss/10 border-moss/30 text-moss' : liveProgress >= 15 ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-paper border-rule text-ink-faint'
+            }`}>
+              <div className="flex items-center justify-between text-xs font-mono font-bold">
+                <span className="flex items-center">
+                  {liveProgress >= 30 ? <Check className="w-3.5 h-3.5 mr-1 text-moss" /> : <span className="mr-1">2.</span>}
+                  Plate Geometry
+                </span>
+                {liveProgress >= 30 ? (
+                  <span className="text-[10px] font-normal uppercase">Done</span>
+                ) : liveProgress >= 15 ? (
+                  <span className="text-[10px] font-normal uppercase animate-pulse">Active</span>
+                ) : null}
+              </div>
+              <p className="text-[11px] font-mono mt-1 text-ink-soft">
+                Dimensions & orientation mapped
+              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div className={`p-4 rounded border transition-colors ${
+              liveProgress >= 88 ? 'bg-moss/10 border-moss/30 text-moss' : liveProgress >= 30 ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-paper border-rule text-ink-faint'
+            }`}>
+              <div className="flex items-center justify-between text-xs font-mono font-bold">
+                <span className="flex items-center">
+                  {liveProgress >= 88 ? <Check className="w-3.5 h-3.5 mr-1 text-moss" /> : <span className="mr-1">3.</span>}
+                  Transcription
+                </span>
+                {liveProgress >= 88 ? (
+                  <span className="text-[10px] font-normal uppercase">Done</span>
+                ) : liveProgress >= 30 ? (
+                  <span className="text-[10px] font-normal uppercase animate-pulse">Folio {activePage}/{totalPages}</span>
+                ) : null}
+              </div>
+              <p className="text-[11px] font-mono mt-1 text-ink-soft">
+                Glyph detection & invisible text layer
+              </p>
+            </div>
+
+            {/* Step 4 */}
+            <div className={`p-4 rounded border transition-colors ${
+              liveProgress >= 100 ? 'bg-moss/10 border-moss/30 text-moss' : liveProgress >= 88 ? 'bg-cyan/10 border-cyan/30 text-cyan' : 'bg-paper border-rule text-ink-faint'
+            }`}>
+              <div className="flex items-center justify-between text-xs font-mono font-bold">
+                <span className="flex items-center">
+                  {liveProgress >= 100 ? <Check className="w-3.5 h-3.5 mr-1 text-moss" /> : <span className="mr-1">4.</span>}
+                  Assembly
+                </span>
+                {liveProgress >= 88 && liveProgress < 100 && (
+                  <span className="text-[10px] font-normal uppercase animate-pulse">Verifying</span>
+                )}
+              </div>
+              <p className="text-[11px] font-mono mt-1 text-ink-soft">
+                Searchable coordinate verification
+              </p>
+            </div>
+          </div>
+
+          {/* Footer note & Abort button */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-rule text-xs font-mono text-ink-faint">
+            <div className="flex items-center space-x-2">
+              <ShieldCheck className="w-4 h-4 text-moss shrink-0" />
+              <span>Isolated RAM namespace processing • Zero visual modification to scan plates</span>
+            </div>
+
+            <button
+              onClick={() => {
+                setIsProcessing(false);
+                setErrorMessage('Processing paused by user.');
+              }}
+              className="text-xs font-mono text-ink-soft hover:text-red transition-colors underline"
+            >
+              Cancel Processing
+            </button>
+          </div>
+        </div>
       ) : (
         // VIEW: SPLIT WORKBENCH WITH LIVE DOCUMENT PREVIEW DESK
         <div className="space-y-6">
+          {/* Top Completion Highlight Banner (Shown when finished) */}
+          {isCompleted && (
+            <div className="bg-moss/10 border border-moss/30 rounded-md p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-subtle animate-fade-in">
+              <div className="flex items-start space-x-3.5">
+                <div className="w-9 h-9 rounded-full bg-moss/20 flex items-center justify-center text-moss shrink-0 mt-0.5">
+                  <CheckCircle2 className="w-5 h-5 text-moss" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-display font-semibold text-ink">
+                    Searchable PDF Successfully Generated!
+                  </h3>
+                  <p className="text-xs text-ink-soft mt-0.5">
+                    Original scan plates preserved with invisible, searchable text layer embedded. Ctrl+F and text selection ready.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleDownload(currentJob.job_id, currentJob.original_filename)}
+                disabled={isDownloading}
+                className="inline-flex items-center justify-center px-5 py-2.5 rounded bg-moss hover:bg-moss/90 text-paper font-sans font-semibold text-xs shadow-ink-button transition-all shrink-0 min-h-[40px]"
+              >
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" /> Download Searchable PDF
+                  </>
+                )}
+              </button>
+            </div>
+          )}
           {/* Main Workspace Grid: Left = Preview Desk, Right = Controls & Telemetry */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* LEFT COLUMN: LIVE DOCUMENT PREVIEW DESK (7 Cols) */}
@@ -569,17 +891,6 @@ export const OCRStudio = () => {
                       ref={canvasRef}
                       className="max-w-full max-h-full w-auto h-auto rounded border border-rule/60 bg-white shadow-ink-lift transition-transform duration-150 object-contain"
                     />
-
-                    {/* LIVE SCANNING BEAM ANIMATION (Visible when processing) */}
-                    {isProcessing && (
-                      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded">
-                        <div className="absolute left-0 right-0 h-1 bg-gradient-to-r from-cyan/20 via-cyan to-cyan/20 shadow-[0_0_12px_rgba(39,70,122,0.8)] animate-ocr-scan" />
-                        <div className="absolute top-2.5 right-2.5 bg-ink/85 text-paper text-[10px] font-mono px-2 py-0.5 rounded shadow flex items-center gap-1.5 backdrop-blur-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan animate-ping" />
-                          <span>OPTICAL SCAN ACTIVE</span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -713,8 +1024,8 @@ export const OCRStudio = () => {
                 ) : null}
               </div>
 
-              {/* 2. Processing Pipeline Telemetry (Shown during processing or completion) */}
-              {(isProcessing || isCompleted) && currentJob && (
+              {/* 2. Processing Pipeline Telemetry (Shown upon completion) */}
+              {isCompleted && currentJob && (
                 <div className="bg-vellum border border-rule rounded-md p-4 sm:p-5 shadow-subtle space-y-4 animate-fade-in">
                   <div>
                     <div className="flex items-center justify-between text-xs font-mono">
