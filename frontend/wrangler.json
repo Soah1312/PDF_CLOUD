@@ -7,6 +7,9 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+  "build": {
+    "command": "npm run build"
+  },
   "vars": {
     "API_ORIGIN": "http://ec2-52-66-196-61.ap-south-1.compute.amazonaws.com"
   }

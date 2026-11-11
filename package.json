@@ -1,0 +1,8 @@
+{
+  "name": "pdf-cloud",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "deploy": "cd frontend && npx wrangler deploy"
+  }
+}
