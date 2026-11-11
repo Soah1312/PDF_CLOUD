@@ -1,0 +1,30 @@
+{
+  "name": "CloudPDF Studio — The Bindery",
+  "short_name": "The Bindery",
+  "description": "Print-shop workbench for precision PDF operations, stream compression, and forensic canary watermarks.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F1E9DA",
+  "theme_color": "#F1E9DA",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}
+

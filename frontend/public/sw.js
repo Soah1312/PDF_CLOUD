@@ -1,7 +1,7 @@
 // Service Worker for CloudPDF Studio — The Bindery
 // Caches application shell and typography only. Strictly ZERO document or API persistence.
 
-const CACHE_NAME = 'cloudpdf-shell-v2';
+const CACHE_NAME = 'cloudpdf-shell-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

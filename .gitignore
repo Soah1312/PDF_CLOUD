@@ -38,8 +38,9 @@ backend/storage/
 node_modules/
 **/node_modules/
 frontend/node_modules/
-dist/
-frontend/dist/
+# Allow tracking frontend/dist for Cloudflare automated Git deployment
+!frontend/dist/
+!frontend/dist/**
 frontend/dist-ssr/
 *.local
 
