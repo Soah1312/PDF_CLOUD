@@ -96,6 +96,10 @@ export default {
           "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
         );
         responseHeaders.set("Pragma", "no-cache");
+        responseHeaders.set(
+          "Access-Control-Expose-Headers",
+          "*, X-Guest-Session-ID, x-guest-session-id, Content-Disposition"
+        );
 
         const isRedirect = [301, 302, 303, 307, 308].includes(upstreamResponse.status);
         const responseBody = isRedirect || method === "HEAD" ? null : upstreamResponse.body;

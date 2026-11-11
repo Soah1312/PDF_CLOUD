@@ -6,17 +6,31 @@ const api = axios.create({
   timeout: 60000, // 60s for processing large files
 });
 
+// Persistent Guest Session Manager (reused across the session)
+export const getOrCreateGuestSessionId = () => {
+  let guestSession = sessionStorage.getItem('cloudpdf_guest_session_id');
+  if (!guestSession) {
+    guestSession = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+    sessionStorage.setItem('cloudpdf_guest_session_id', guestSession);
+  }
+  return guestSession;
+};
+
 // Request Interceptor: Attach Cognito JWT Bearer token if present & Guest Session ID
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('cloudpdf_auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    // Attach guest session ID if stored
-    const guestSession = sessionStorage.getItem('cloudpdf_guest_session_id');
-    if (guestSession && !token) {
+    } else {
+      // Unauthenticated / Guest Mode: ensure persistent guest session ID is attached
+      const guestSession = getOrCreateGuestSessionId();
       config.headers['X-Guest-Session-ID'] = guestSession;
     }
 
@@ -28,7 +42,7 @@ api.interceptors.request.use(
 // Response Interceptor: Capture X-Guest-Session-ID header
 api.interceptors.response.use(
   (response) => {
-    const newGuestSession = response.headers['x-guest-session-id'];
+    const newGuestSession = response.headers['x-guest-session-id'] || response.headers['X-Guest-Session-ID'];
     if (newGuestSession) {
       sessionStorage.setItem('cloudpdf_guest_session_id', newGuestSession);
     }
@@ -232,32 +246,52 @@ export const fetchWorkflowExecution = async (executionId) => {
 
 // --- OCRmyPDF & Tesseract OCR Studio APIs ---
 export const inspectPdfOcr = async (file) => {
+  const token = localStorage.getItem('cloudpdf_auth_token');
+  const headers = { 'Content-Type': 'multipart/form-data' };
+  if (!token) {
+    headers['X-Guest-Session-ID'] = getOrCreateGuestSessionId();
+  }
   const formData = new FormData();
   formData.append('file', file);
-  const response = await api.post('/api/v1/ocr/inspect', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await api.post('/api/v1/ocr/inspect', formData, { headers });
   return response.data;
 };
 
 export const createSearchablePdf = async (file, forceOcr = false, language = 'eng') => {
+  const token = localStorage.getItem('cloudpdf_auth_token');
+  const headers = { 'Content-Type': 'multipart/form-data' };
+  if (!token) {
+    headers['X-Guest-Session-ID'] = getOrCreateGuestSessionId();
+  }
   const formData = new FormData();
   formData.append('file', file);
   formData.append('force_ocr', forceOcr ? 'true' : 'false');
   formData.append('language', language);
-  const response = await api.post('/api/v1/ocr/searchable', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await api.post('/api/v1/ocr/searchable', formData, { headers });
+  if (response.data?.guest_session_id) {
+    sessionStorage.setItem('cloudpdf_guest_session_id', response.data.guest_session_id);
+  }
   return response.data;
 };
 
 export const getOcrJobStatus = async (jobId) => {
-  const response = await api.get(`/api/v1/ocr/jobs/${jobId}`);
+  const token = localStorage.getItem('cloudpdf_auth_token');
+  const headers = {};
+  if (!token) {
+    headers['X-Guest-Session-ID'] = getOrCreateGuestSessionId();
+  }
+  const response = await api.get(`/api/v1/ocr/jobs/${jobId}`, { headers });
   return response.data;
 };
 
 export const downloadOcrPdf = async (jobId, filename = 'searchable_document.pdf') => {
+  const token = localStorage.getItem('cloudpdf_auth_token');
+  const headers = {};
+  if (!token) {
+    headers['X-Guest-Session-ID'] = getOrCreateGuestSessionId();
+  }
   const response = await api.get(`/api/v1/ocr/jobs/${jobId}/download`, {
+    headers,
     responseType: 'blob',
   });
   const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
@@ -272,7 +306,12 @@ export const downloadOcrPdf = async (jobId, filename = 'searchable_document.pdf'
 };
 
 export const fetchOcrJobs = async () => {
-  const response = await api.get('/api/v1/ocr/jobs');
+  const token = localStorage.getItem('cloudpdf_auth_token');
+  const headers = {};
+  if (!token) {
+    headers['X-Guest-Session-ID'] = getOrCreateGuestSessionId();
+  }
+  const response = await api.get('/api/v1/ocr/jobs', { headers });
   return response.data;
 };
 

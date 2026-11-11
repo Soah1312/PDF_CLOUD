@@ -80,13 +80,20 @@ def _verify_ocr_job_ownership(
 
 @router.post("/inspect", response_model=OCRInspectResponse, summary="Inspect PDF for Existing Digital Text")
 async def inspect_pdf(
+    response: Response,
     file: UploadFile = File(...),
     user: Optional[User] = Depends(get_optional_user),
+    x_session_id: Optional[str] = Header(None, alias="X-Session-ID"),
+    x_guest_session_id: Optional[str] = Header(None, alias="X-Guest-Session-ID"),
 ):
     """
     Pre-flight document inspection.
     Checks whether a PDF already contains embedded searchable text before running OCR.
     """
+    session_id = x_session_id or x_guest_session_id
+    if not user and session_id:
+        response.headers["X-Guest-Session-ID"] = session_id
+
     content = await file.read()
     if not validate_file_signature(content, "pdf"):
         raise HTTPException(
@@ -107,6 +114,7 @@ async def inspect_pdf(
 
 @router.post("/searchable", summary="Create Searchable PDF via OCRmyPDF & Tesseract")
 async def create_searchable_pdf(
+    response: Response,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     force_ocr: bool = Form(False),
@@ -172,10 +180,11 @@ async def create_searchable_pdf(
         processed_s3_key = storage_service.build_user_processed_key(user.cognito_sub, f"{job_id}_searchable_{filename}")
         expires_at = None
     else:
-        guest_session = session_id or f"guest-{uuid.uuid4().hex[:16]}"
+        guest_session = session_id or str(uuid.uuid4())
         raw_s3_key = storage_service.build_guest_raw_key(guest_session, f"{job_id}_{filename}")
         processed_s3_key = storage_service.build_guest_processed_key(guest_session, f"{job_id}_searchable_{filename}")
         expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+        response.headers["X-Guest-Session-ID"] = guest_session
 
     ocr_job = OCRJob(
         id=job_id,
@@ -211,12 +220,14 @@ async def create_searchable_pdf(
         has_digital_text=has_digital_text,
         page_count=num_pages,
         message="OCR job successfully queued for OCRmyPDF + Tesseract processing.",
+        guest_session_id=guest_session,
     )
 
 
 @router.get("/jobs/{job_id}", response_model=OCRJobStatusResponse, summary="Get OCR Job Status")
 def get_ocr_job_status(
     job_id: uuid.UUID,
+    response: Response,
     user: Optional[User] = Depends(get_optional_user),
     x_session_id: Optional[str] = Header(None, alias="X-Session-ID"),
     x_guest_session_id: Optional[str] = Header(None, alias="X-Guest-Session-ID"),
@@ -235,6 +246,9 @@ def get_ocr_job_status(
         )
 
     _verify_ocr_job_ownership(job, user, session_id)
+
+    if job.guest_session_id:
+        response.headers["X-Guest-Session-ID"] = job.guest_session_id
 
     download_url = None
     if job.status == "COMPLETED":
@@ -300,18 +314,23 @@ def download_searchable_pdf(
         )
 
     download_filename = f"searchable_{job.original_filename}"
+    resp_headers = {
+        "Content-Disposition": f'attachment; filename="{download_filename}"',
+        "X-Page-Count": str(job.page_count),
+    }
+    if job.guest_session_id:
+        resp_headers["X-Guest-Session-ID"] = job.guest_session_id
+
     return Response(
         content=file_bytes,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{download_filename}"',
-            "X-Page-Count": str(job.page_count),
-        },
+        headers=resp_headers,
     )
 
 
 @router.get("/jobs", summary="List OCR Jobs")
 def list_ocr_jobs(
+    response: Response,
     user: Optional[User] = Depends(get_optional_user),
     x_session_id: Optional[str] = Header(None, alias="X-Session-ID"),
     x_guest_session_id: Optional[str] = Header(None, alias="X-Guest-Session-ID"),
@@ -321,6 +340,8 @@ def list_ocr_jobs(
     Lists recent OCR jobs for the authenticated member or active guest session.
     """
     session_id = x_session_id or x_guest_session_id
+    if not user and session_id:
+        response.headers["X-Guest-Session-ID"] = session_id
     if user:
         jobs = (
             db.query(OCRJob)

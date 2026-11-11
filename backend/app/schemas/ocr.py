@@ -23,6 +23,7 @@ class OCRJobCreateResponse(BaseModel):
     has_digital_text: bool
     page_count: int
     message: str
+    guest_session_id: Optional[str] = None
 
 
 class OCRJobStatusResponse(BaseModel):

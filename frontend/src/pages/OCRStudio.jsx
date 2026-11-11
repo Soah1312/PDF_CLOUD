@@ -174,6 +174,10 @@ export const OCRStudio = () => {
         return;
       }
 
+      if (resp.guest_session_id) {
+        sessionStorage.setItem('cloudpdf_guest_session_id', resp.guest_session_id);
+      }
+
       setCurrentJob({
         job_id: resp.job_id,
         status: resp.status || 'PENDING',

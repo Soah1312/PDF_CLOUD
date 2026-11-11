@@ -486,3 +486,61 @@ def test_api_ocr_job_expiration_check(client, clean_db):
     )
     assert response.status_code == 410
     assert "expired" in response.json()["detail"].lower()
+
+
+def test_guest_ocr_lifecycle_reuses_guest_session_id(client, clean_db):
+    """
+    Verifies the complete guest session lifecycle:
+    1. Client provides or backend auto-generates X-Guest-Session-ID on upload.
+    2. Response includes X-Guest-Session-ID in both header and JSON body.
+    3. Polling with the exact same guest session returns HTTP 200.
+    4. Polling without the guest session returns HTTP 403 Access Denied.
+    """
+    pdf_bytes = create_scanned_image_pdf("GUEST SESSION AUDIT")
+    guest_uuid = str(uuid.uuid4())
+
+    # Case A: Client passes X-Guest-Session-ID
+    upload_resp = client.post(
+        "/api/v1/ocr/searchable",
+        files={"file": ("guest_doc.pdf", pdf_bytes, "application/pdf")},
+        data={"force_ocr": "true"},
+        headers={"X-Guest-Session-ID": guest_uuid},
+    )
+    assert upload_resp.status_code == 200
+    assert upload_resp.headers.get("X-Guest-Session-ID") == guest_uuid
+    job_data = upload_resp.json()
+    job_id = job_data["job_id"]
+    assert job_data.get("guest_session_id") == guest_uuid
+
+    # Polling with matching guest session -> 200 OK
+    poll_resp = client.get(
+        f"/api/v1/ocr/jobs/{job_id}",
+        headers={"X-Guest-Session-ID": guest_uuid},
+    )
+    assert poll_resp.status_code == 200
+    assert poll_resp.json()["job_id"] == job_id
+
+    # Polling WITHOUT guest session -> 403 Forbidden
+    unauthed_poll = client.get(f"/api/v1/ocr/jobs/{job_id}")
+    assert unauthed_poll.status_code == 403
+    assert "Access denied" in unauthed_poll.json()["detail"]
+
+    # Case B: Client does not pass header -> Backend generates UUID session and returns it
+    upload_resp2 = client.post(
+        "/api/v1/ocr/searchable",
+        files={"file": ("guest_doc2.pdf", pdf_bytes, "application/pdf")},
+        data={"force_ocr": "true"},
+    )
+    assert upload_resp2.status_code == 200
+    generated_guest_id = upload_resp2.headers.get("X-Guest-Session-ID")
+    assert generated_guest_id is not None
+    job_data2 = upload_resp2.json()
+    job_id2 = job_data2["job_id"]
+    assert job_data2.get("guest_session_id") == generated_guest_id
+
+    # Polling with the auto-generated session -> 200 OK
+    poll_resp2 = client.get(
+        f"/api/v1/ocr/jobs/{job_id2}",
+        headers={"X-Guest-Session-ID": generated_guest_id},
+    )
+    assert poll_resp2.status_code == 200

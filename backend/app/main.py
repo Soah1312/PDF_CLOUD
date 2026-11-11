@@ -54,6 +54,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*", "X-Guest-Session-ID", "x-guest-session-id", "Content-Disposition"],
 )
 
 # Mount Routes
