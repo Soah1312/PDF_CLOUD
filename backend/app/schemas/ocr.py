@@ -37,6 +37,8 @@ class OCRJobStatusResponse(BaseModel):
     has_digital_text: bool
     force_ocr: bool
     detected_words: int
+    ocr_engine: str = "ocrmypdf"
+    language: str = "eng"
     error_message: Optional[str] = None
     is_completed: bool
     download_url: Optional[str] = None

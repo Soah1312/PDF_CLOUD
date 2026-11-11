@@ -230,7 +230,7 @@ export const fetchWorkflowExecution = async (executionId) => {
   return response.data;
 };
 
-// --- Amazon Textract OCR Studio APIs ---
+// --- OCRmyPDF & Tesseract OCR Studio APIs ---
 export const inspectPdfOcr = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -240,10 +240,11 @@ export const inspectPdfOcr = async (file) => {
   return response.data;
 };
 
-export const createSearchablePdf = async (file, forceOcr = false) => {
+export const createSearchablePdf = async (file, forceOcr = false, language = 'eng') => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('force_ocr', forceOcr ? 'true' : 'false');
+  formData.append('language', language);
   const response = await api.post('/api/v1/ocr/searchable', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

@@ -85,8 +85,7 @@ async def inspect_pdf(
 ):
     """
     Pre-flight document inspection.
-    Checks whether a PDF already contains embedded searchable text before invoking
-    Amazon Textract, protecting users from unnecessary cloud processing costs.
+    Checks whether a PDF already contains embedded searchable text before running OCR.
     """
     content = await file.read()
     if not validate_file_signature(content, "pdf"):
@@ -106,11 +105,12 @@ async def inspect_pdf(
     return inspection
 
 
-@router.post("/searchable", summary="Create Searchable PDF via Amazon Textract")
+@router.post("/searchable", summary="Create Searchable PDF via OCRmyPDF & Tesseract")
 async def create_searchable_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     force_ocr: bool = Form(False),
+    language: str = Form("eng"),
     user: Optional[User] = Depends(get_optional_user),
     x_session_id: Optional[str] = Header(None, alias="X-Session-ID"),
     x_guest_session_id: Optional[str] = Header(None, alias="X-Guest-Session-ID"),
@@ -118,9 +118,9 @@ async def create_searchable_pdf(
 ):
     session_id = x_session_id or x_guest_session_id
     """
-    Submits a PDF for OCR processing using Amazon Textract in ap-south-1.
+    Submits a PDF for OCR processing using OCRmyPDF and Tesseract.
     If the document already contains selectable digital text and force_ocr is False,
-    returns an advisory response allowing the user to confirm before incurring cloud fees.
+    returns an advisory response allowing the user to confirm.
     Otherwise, enqueues the job and starts asynchronous pipeline processing.
     """
     content = await file.read()
@@ -148,7 +148,7 @@ async def create_searchable_pdf(
     has_digital_text = inspection["has_digital_text"]
 
     if has_digital_text and not force_ocr:
-        # Prompt user for confirmation to avoid accidental Textract charges
+        # Prompt user for confirmation
         return {
             "job_id": None,
             "status": "REQUIRES_CONFIRMATION",
@@ -159,7 +159,7 @@ async def create_searchable_pdf(
             "page_count": num_pages,
             "message": (
                 f"This PDF already appears to contain searchable text ({inspection['detected_words']} words detected). "
-                "To force full OCR re-scanning with Amazon Textract, enable the 'Force OCR' option."
+                "To force full OCR re-scanning with OCRmyPDF + Tesseract, enable the 'Force OCR' option."
             ),
         }
 
@@ -184,6 +184,8 @@ async def create_searchable_pdf(
         original_filename=filename,
         original_s3_key=raw_s3_key,
         output_s3_key=processed_s3_key,
+        ocr_engine="ocrmypdf",
+        language=language or "eng",
         page_count=num_pages,
         file_size_bytes=len(content),
         status="PENDING",
@@ -208,7 +210,7 @@ async def create_searchable_pdf(
         progress=ocr_job.progress,
         has_digital_text=has_digital_text,
         page_count=num_pages,
-        message="OCR job successfully queued for Amazon Textract processing.",
+        message="OCR job successfully queued for OCRmyPDF + Tesseract processing.",
     )
 
 
@@ -250,6 +252,8 @@ def get_ocr_job_status(
         has_digital_text=job.has_digital_text,
         force_ocr=job.force_ocr,
         detected_words=job.detected_words,
+        ocr_engine=job.ocr_engine,
+        language=job.language,
         error_message=job.error_message,
         is_completed=(job.status == "COMPLETED"),
         download_url=download_url,
@@ -344,6 +348,8 @@ def list_ocr_jobs(
             "status": j.status,
             "stage": j.processing_stage,
             "progress": j.progress,
+            "ocr_engine": j.ocr_engine,
+            "language": j.language,
             "created_at": j.created_at.isoformat(),
             "completed_at": j.completed_at.isoformat() if j.completed_at else None,
             "download_url": f"/api/v1/ocr/jobs/{j.id}/download" if j.status == "COMPLETED" else None,

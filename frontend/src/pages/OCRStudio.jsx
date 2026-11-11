@@ -32,13 +32,12 @@ import {
 } from '../services/api';
 
 const STAGE_LABELS = {
-  QUEUED: 'Queued in Cloud Pipeline...',
+  QUEUED: 'Queued in Processing Pipeline...',
   VALIDATING: 'Validating Document Geometry & Integrity...',
-  UPLOADING_S3: 'Transferring to Encrypted Private S3 Bucket...',
-  STARTING_TEXTRACT: 'Initiating Amazon Textract Asynchronous Engine...',
-  TEXTRACT_PROCESSING: 'Amazon Textract Detecting Text & Geometry...',
-  RECONSTRUCTING_PDF: 'Injecting Invisible Text Layer (PyMuPDF render_mode=3)...',
-  UPLOADING_OUTPUT: 'Finalizing Searchable PDF in S3...',
+  STORING_ORIGINAL: 'Transferring to Encrypted Private S3 Bucket...',
+  OCR_PROCESSING: 'OCRmyPDF + Tesseract Recognizing Glyphs & Layout...',
+  VERIFYING_OUTPUT: 'Verifying Injected Text Layer & PDF Structure...',
+  STORING_OUTPUT: 'Finalizing Searchable PDF in S3 Storage...',
   COMPLETED: 'Searchable PDF Ready!',
   FAILED: 'Processing Failed',
 };
@@ -193,7 +192,7 @@ export const OCRStudio = () => {
     }
   };
 
-  // Polling loop for async Textract job
+  // Polling loop for async OCR job
   const startPolling = (jobId) => {
     let attempts = 0;
     const maxAttempts = 120; // Up to 4-5 minutes max
@@ -264,15 +263,15 @@ export const OCRStudio = () => {
           <div>
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan/10 border border-cyan/20 text-cyan text-xs font-semibold mb-3">
               <Cpu className="w-3.5 h-3.5 mr-1" />
-              <span>BENCH TOOL 15 • AMAZON TEXTRACT OCR</span>
+              <span>BENCH TOOL 15 • OCRmyPDF + TESSERACT OCR</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-ink tracking-tight font-serif">
               OCR Studio — Make PDF Searchable
             </h1>
             <p className="mt-2 text-sm sm:text-base text-ink-soft max-w-3xl leading-relaxed">
-              Upload scanned documents, invoices, or books. Amazon Textract detects glyphs and typography in{' '}
-              <span className="font-mono text-ink font-semibold">ap-south-1</span>, and PyMuPDF embeds a calibrated
-              invisible text layer (<code className="bg-kraft px-1.5 py-0.5 rounded text-xs text-ink font-mono">render_mode=3</code>)—preserving the original page image while enabling instant text selection, clipboard copying, and Ctrl+F keyboard search.
+              Upload scanned documents, invoices, or books. OCRmyPDF and Tesseract perform high-accuracy Optical Character
+              Recognition, embedding an invisible machine-readable text layer while preserving original scanned page image
+              appearance, dimensions, and visual clarity—enabling instant text selection, clipboard copying, and Ctrl+F keyboard search.
             </p>
           </div>
 
@@ -280,7 +279,7 @@ export const OCRStudio = () => {
             <span className="flex items-center text-moss font-semibold">
               <ShieldCheck className="w-4 h-4 mr-1 text-moss" /> Private S3 Storage
             </span>
-            <span className="mt-1">AWS Region: ap-south-1</span>
+            <span className="mt-1">Engine: OCRmyPDF + Tesseract</span>
           </div>
         </div>
       </div>
@@ -401,7 +400,7 @@ export const OCRStudio = () => {
                           className="w-4 h-4 rounded border-rule text-cyan focus:ring-cyan"
                         />
                         <span className="font-semibold text-xs text-ink">
-                          Force OCR: Proceed with full Amazon Textract scan anyway (useful for mixed handwriting or faded scans)
+                          Force OCR: Proceed with full OCRmyPDF + Tesseract re-scan anyway (useful for mixed handwriting or faded scans)
                         </span>
                       </label>
                     </div>
@@ -410,7 +409,7 @@ export const OCRStudio = () => {
                     <div className="p-4 rounded-xl bg-moss/10 border border-moss/30 text-xs text-moss flex items-center space-x-2.5">
                       <CheckCircle2 className="w-4 h-4 shrink-0" />
                       <span>
-                        Verified Scanned Document: No embedded digital text detected. Ready for Amazon Textract OCR.
+                        Verified Scanned Document: No embedded digital text detected. Ready for OCRmyPDF + Tesseract OCR.
                       </span>
                     </div>
                   )
@@ -451,7 +450,7 @@ export const OCRStudio = () => {
                 STAGE: {currentJob.processing_stage}
               </span>
               <h3 className="text-xl font-bold text-ink mt-1 font-serif">
-                {STAGE_LABELS[currentJob.processing_stage] || 'Processing with Amazon Textract...'}
+                {STAGE_LABELS[currentJob.processing_stage] || 'Processing with OCRmyPDF + Tesseract...'}
               </h3>
               <p className="text-xs text-ink-soft mt-1.5 font-mono">
                 Document: {file?.name || currentJob.original_filename}
@@ -489,9 +488,9 @@ export const OCRStudio = () => {
               }`}>
                 <div className="font-bold flex items-center">
                   {currentJob.progress >= 75 ? <Check className="w-3.5 h-3.5 mr-1" /> : <span className="w-3.5 h-3.5 mr-1">2.</span>}
-                  Textract Neural
+                  Tesseract OCR
                 </div>
-                <div className="text-[10px] mt-0.5 opacity-80">Glyphs & bboxes</div>
+                <div className="text-[10px] mt-0.5 opacity-80">OCRmyPDF engine</div>
               </div>
 
               <div className={`p-3 rounded-lg border text-xs ${
@@ -501,7 +500,7 @@ export const OCRStudio = () => {
                   {currentJob.progress >= 90 ? <Check className="w-3.5 h-3.5 mr-1" /> : <span className="w-3.5 h-3.5 mr-1">3.</span>}
                   Invisible Layer
                 </div>
-                <div className="text-[10px] mt-0.5 opacity-80">PyMuPDF render_mode=3</div>
+                <div className="text-[10px] mt-0.5 opacity-80">Searchable PDF/A</div>
               </div>
 
               <div className={`p-3 rounded-lg border text-xs ${
@@ -530,7 +529,7 @@ export const OCRStudio = () => {
                     Searchable PDF Successfully Generated!
                   </h3>
                   <p className="text-xs text-ink-soft mt-0.5">
-                    Original scanned pages preserved. Machine-readable invisible text layer injected.
+                    Original scanned pages preserved. Machine-readable invisible text layer injected via OCRmyPDF + Tesseract.
                   </p>
                 </div>
               </div>

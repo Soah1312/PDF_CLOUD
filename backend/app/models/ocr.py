@@ -18,7 +18,7 @@ from app.models.base import Base
 
 class OCRJob(Base):
     """
-    Amazon Textract OCR processing job record.
+    OCRmyPDF + Tesseract OCR processing job record.
     Supports both Guest sessions and Authenticated members.
     Tracks processing stages, progress, and searchable PDF reconstruction status.
     """
@@ -35,12 +35,13 @@ class OCRJob(Base):
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     original_s3_key: Mapped[str] = mapped_column(String(512), nullable=False)
     output_s3_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
-    textract_job_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    ocr_engine: Mapped[str] = mapped_column(String(64), default="ocrmypdf", nullable=False)
+    language: Mapped[str] = mapped_column(String(32), default="eng", nullable=False)
     page_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     output_file_size_bytes: Mapped[Optional[int]] = mapped_column(BigInteger, default=0, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="PENDING", nullable=False, index=True)  # PENDING, PROCESSING, COMPLETED, FAILED
-    processing_stage: Mapped[str] = mapped_column(String(64), default="QUEUED", nullable=False)  # QUEUED, UPLOADING, TEXTRACT_PROCESSING, RECONSTRUCTING_PDF, COMPLETED, FAILED
+    processing_stage: Mapped[str] = mapped_column(String(64), default="QUEUED", nullable=False)  # QUEUED, VALIDATING, STORING_ORIGINAL, OCR_PROCESSING, VERIFYING_OUTPUT, STORING_OUTPUT, COMPLETED, FAILED
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # 0 to 100
     has_digital_text: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     force_ocr: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

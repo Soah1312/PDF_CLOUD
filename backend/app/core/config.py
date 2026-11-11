@@ -48,11 +48,10 @@ class Settings(BaseSettings):
     # Forensic Canary Cryptographic Secret (persistent across restarts, must be 32+ chars in prod)
     CANARY_HMAC_SECRET: Optional[str] = None
 
-    # Amazon Textract OCR Settings
-    TEXTRACT_SNS_TOPIC_ARN: Optional[str] = None
-    TEXTRACT_ROLE_ARN: Optional[str] = None
-    TEXTRACT_SQS_QUEUE_URL: Optional[str] = None
-    MAX_OCR_PAGE_COUNT: int = 100
+    # OCRmyPDF + Tesseract OCR Settings
+    OCR_DEFAULT_LANGUAGE: str = "eng"
+    OCR_TIMEOUT_SECONDS: int = 600
+    OCR_ROTATE_PAGES: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",
