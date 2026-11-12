@@ -129,9 +129,14 @@ export default {
     // Serve static SPA assets from ./dist with SPA fallback
     let response = await env.ASSETS.fetch(request);
     if (response.status === 404 && request.method === 'GET') {
-      const fallbackUrl = new URL('/index.html', request.url);
-      const fallbackReq = new Request(fallbackUrl.toString(), request);
-      response = await env.ASSETS.fetch(fallbackReq);
+      const pathname = url.pathname;
+      // Only fall back to index.html for client-side navigation routes, never for missing static files
+      const isStaticAsset = /\.[a-zA-Z0-9]+$/.test(pathname);
+      if (!isStaticAsset || pathname === '/index.html') {
+        const fallbackUrl = new URL('/index.html', request.url);
+        const fallbackReq = new Request(fallbackUrl.toString(), request);
+        response = await env.ASSETS.fetch(fallbackReq);
+      }
     }
 
     // For HTML documents, strictly prevent caching so deployed bundles load instantly

@@ -1,7 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
-  <rect width="24" height="24" rx="4.5" fill="#E8E8E3" />
-  <path d="M6 6h8.6L18 9.35v8.15H9.15L6 14.35V6Z" fill="#111113" />
-  <path d="M9 9h5.15L15 9.85V15H9.85L9 14.15V9Z" fill="#E8E8E3" />
-  <path d="M12 9v6M9 12h6" stroke="#111113" stroke-width="0.75" />
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" shape-rendering="geometricPrecision">
+  <defs>
+    <linearGradient id="bindery-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#241B14" />
+      <stop offset="100%" stop-color="#140E0A" />
+    </linearGradient>
+    <linearGradient id="bindery-ribbon" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E24A24" />
+      <stop offset="100%" stop-color="#B83310" />
+    </linearGradient>
+    <filter id="subtle-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="0.75" stdDeviation="0.75" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
 
+  <!-- Dark Ink Rounded Card Badge for High Contrast in Light & Dark Browser Tabs -->
+  <rect x="1" y="1" width="30" height="30" rx="7" fill="url(#bindery-bg)" stroke="#3D2E24" stroke-width="0.8" />
+
+  <!-- Warm Ivory Folio Sheet -->
+  <path d="M8 6h9.5L24 12.5V25a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 25V7.5A1.5 1.5 0 0 1 8 6z" fill="#FAF6EE" filter="url(#subtle-shadow)" />
+
+  <!-- Folded Page Corner -->
+  <path d="M17.5 6v5a1.5 1.5 0 0 0 1.5 1.5h5z" fill="#D6C7AE" />
+
+  <!-- Signature Vermillion Spine / Bookmark Ribbon -->
+  <path d="M10 5.5h4.5v10.5l-2.25-1.75L10 16V5.5z" fill="url(#bindery-ribbon)" />
+
+  <!-- Typeset Rule Bars -->
+  <rect x="10.5" y="18.5" width="10" height="1.6" rx="0.8" fill="#241B14" />
+  <rect x="10.5" y="21.5" width="7" height="1.6" rx="0.8" fill="#8C7D70" />
+</svg>

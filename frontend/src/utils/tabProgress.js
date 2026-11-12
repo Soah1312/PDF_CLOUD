@@ -6,7 +6,7 @@
  */
 
 let originalTitle = typeof document !== 'undefined' ? document.title : 'CloudPDF — The Bindery';
-let originalFavicon = '/favicon.svg';
+let originalFavicon = '/favicon.svg?v=3';
 let canvas = null;
 
 function getFaviconLink() {

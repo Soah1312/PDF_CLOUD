@@ -1,11 +1,15 @@
 // Service Worker for CloudPDF Studio — The Bindery
 // Caches application shell and typography only. Strictly ZERO document or API persistence.
 
-const CACHE_NAME = 'cloudpdf-shell-v3';
+const CACHE_NAME = 'cloudpdf-shell-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/favicon.svg',
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/favicon-16x16.png',
+  '/apple-touch-icon.png',
   '/manifest.webmanifest',
 ];
 
@@ -62,10 +66,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Shell assets (JS, CSS, SVGs): Network first with cache fallback
+  // Shell assets (JS, CSS, SVGs, Images, Manifest): Network first with cache fallback
   if (
     url.origin === self.location.origin &&
-    (url.pathname.startsWith('/assets/') || url.pathname.endsWith('.svg') || url.pathname.endsWith('.webmanifest'))
+    (url.pathname.startsWith('/assets/') ||
+     url.pathname.endsWith('.svg') ||
+     url.pathname.endsWith('.ico') ||
+     url.pathname.endsWith('.png') ||
+     url.pathname.endsWith('.webmanifest'))
   ) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
